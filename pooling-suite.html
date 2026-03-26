@@ -299,6 +299,14 @@ function escapeHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
+function csvSafe(s) {
+  if (s == null) return '';
+  s = String(s);
+  if (/^[=+@\t\r]/.test(s)) s = "'" + s;
+  if (s.indexOf(',') >= 0 || s.indexOf('"') >= 0 || s.indexOf('\n') >= 0) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
 /* ---------- Utility: formatNum ---------- */
 function fmt(x, d) {
   if (x == null || !isFinite(x)) return '—';
@@ -508,16 +516,20 @@ ESTIMATORS.REML = function(yi, vi) {
     // For REML specifically, use:
     // tau2_{n+1} = tau2_n + [sum(w^2*((yi-theta)^2 - vi)) / sum(w^2) + tau2_n * (1 - sumWs2*... )]
     //
-    // Let me use the well-known EM-style REML iteration:
-    // tau2_new = sum(w^2 * max(0, (yi-theta)^2 - vi + tau2)) / sum(w^2)
-    // This is the simplified EM for REML. It converges but can be slow.
-    // Let's use it:
-    var num = 0;
+    // REML Fisher scoring: uses restricted log-likelihood gradient
+    // dl_R/dtau2 = -0.5 * (sum(w_i^2) / sum(w_i) - sum(w_i^2 * (yi-theta)^2))
+    //            = -0.5 * (tr(P) - Q*)  where P accounts for estimating theta
+    // Fisher info: 0.5 * (sum(w_i^2) - sum(w_i^2)^2/sum(w_i)^... )
+    // Simpler: use the Paule-Mandel-style REML iteration:
+    //   tau2_new = tau2 + (sum(w*(yi-theta)^2) - (k-1)) / (sum(w^2) - sum(w^2)/sum(w))
+    var Q_star = 0;
     for (var i = 0; i < k; i++) {
-      var resid2 = Math.pow(yi[i] - theta, 2);
-      num += ws[i] * ws[i] * (resid2 - vi[i] + tau2);
+      Q_star += ws[i] * Math.pow(yi[i] - theta, 2);
     }
-    var tau2_new = Math.max(0, num / sumWs2);
+    // REML: the correction vs ML is subtracting the hat-value trace
+    var trP = sumWs2 / sumWs; // trace of the projection matrix
+    var denom = sumWs2 - trP; // = sum(w^2) - sum(w^2)/sum(w)
+    var tau2_new = Math.max(0, tau2 + (Q_star - (k - 1)) / denom);
 
     if (Math.abs(tau2_new - tau2) < 1e-10) { tau2 = tau2_new; break; }
     tau2 = tau2_new;
