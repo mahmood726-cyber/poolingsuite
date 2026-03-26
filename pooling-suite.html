@@ -272,6 +272,8 @@ tr:hover { background: var(--accent-light); }
     <div style="display:flex;gap:8px;">
       <button class="btn-primary btn-sm" id="btn-export-json">Export JSON</button>
       <button class="btn-secondary btn-sm" id="btn-export-results-csv">Export Results CSV</button>
+      <button class="btn-secondary btn-sm" id="btn-export-maif" title="Export in Meta-Analysis Interchange Format for use in other tools">Export MAIF</button>
+      <button class="btn-secondary btn-sm" id="btn-import-maif" title="Import MAIF data from another tool">Import MAIF</button>
       <button class="btn-secondary btn-sm" id="btn-print-report">Print Report</button>
     </div>
   </div>
@@ -1763,6 +1765,62 @@ function downloadFile(content, filename, mime) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+/* ---------- MAIF Interop ---------- */
+document.getElementById('btn-export-maif').addEventListener('click', function() {
+  var data = getValidData();
+  if (!data || data.length === 0) { alert('No data to export.'); return; }
+  var maif = {
+    version: '1.0',
+    metadata: {
+      effectType: document.getElementById('effect-type-select').value || 'SMD',
+      createdBy: 'Pooling Suite',
+      createdAt: new Date().toISOString(),
+      author: 'Mahmood Ahmad'
+    },
+    studies: data.map(function(d) {
+      return { id: d.label || d.study || ('Study ' + d.idx), yi: d.yi, sei: d.sei };
+    })
+  };
+  if (APP.results) {
+    maif.results = { pooling: {} };
+    APP.results.forEach(function(r) {
+      maif.results.pooling[r.method] = {
+        theta: r.theta, se: r.se, tau2: r.tau2, I2: r.I2_est,
+        ciLo: r.waldCI[0], ciHi: r.waldCI[1],
+        piLo: r.PI[0], piHi: r.PI[1]
+      };
+    });
+  }
+  downloadFile(JSON.stringify(maif, null, 2), 'maif-export.json', 'application/json');
+});
+
+document.getElementById('btn-import-maif').addEventListener('click', function() {
+  var input = document.createElement('input');
+  input.type = 'file'; input.accept = '.json';
+  input.addEventListener('change', function(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      try {
+        var maif = JSON.parse(ev.target.result);
+        if (!maif.studies || !Array.isArray(maif.studies)) { alert('Invalid MAIF: no studies array.'); return; }
+        clearData();
+        maif.studies.forEach(function(s) {
+          addStudyRow(s.id || 'Study', s.yi, s.sei);
+        });
+        if (maif.metadata && maif.metadata.effectType) {
+          var sel = document.getElementById('effect-type-select');
+          if (sel) sel.value = maif.metadata.effectType;
+        }
+        alert('Imported ' + maif.studies.length + ' studies from MAIF.');
+      } catch (ex) { alert('Failed to parse MAIF: ' + ex.message); }
+    };
+    reader.readAsText(file);
+  });
+  input.click();
+});
 
 /* ---------- End IIFE ---------- */
 })();
