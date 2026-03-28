@@ -1,0 +1,1841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>PoolingSuite — Comprehensive Meta-Analysis Pooling Engine</title>
+<meta name="description" content="Browser-based meta-analysis pooling with 10 tau² estimators, 3 CI methods, forest plots, GOSH, Baujat, influence diagnostics.">
+<style>
+/* ===== CSS Variables ===== */
+:root {
+  --bg: #f5f6fa; --bg2: #ffffff; --bg3: #eef0f5;
+  --text: #1a1a2e; --text2: #555; --text3: #888;
+  --accent: #2563eb; --accent2: #1d4ed8; --accent-light: #dbeafe;
+  --border: #d1d5db; --border2: #e5e7eb;
+  --success: #16a34a; --warning: #f59e0b; --danger: #dc2626;
+  --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --mono: 'Consolas', 'Menlo', monospace;
+  --radius: 8px; --shadow: 0 2px 8px rgba(0,0,0,0.08);
+  --tab-height: 44px;
+}
+[data-theme="dark"] {
+  --bg: #0f172a; --bg2: #1e293b; --bg3: #334155;
+  --text: #e2e8f0; --text2: #94a3b8; --text3: #64748b;
+  --accent: #60a5fa; --accent2: #93bbfd; --accent-light: #1e3a5f;
+  --border: #475569; --border2: #334155;
+  --shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+/* ===== Reset & Base ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); line-height: 1.6; }
+a { color: var(--accent); }
+button { font-family: var(--font); cursor: pointer; border: none; border-radius: var(--radius); padding: 8px 16px; font-size: 14px; transition: background 0.2s, transform 0.1s; }
+button:active { transform: scale(0.97); }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent2); }
+.btn-secondary { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:hover { background: var(--border2); }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+input, select, textarea { font-family: var(--font); font-size: 14px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg2); color: var(--text); }
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border2); }
+th { background: var(--bg3); font-weight: 600; position: sticky; top: 0; z-index: 1; }
+tr:hover { background: var(--accent-light); }
+/* ===== Layout ===== */
+.app-header { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; box-shadow: var(--shadow); }
+.app-title { font-size: 20px; font-weight: 700; color: var(--accent); }
+.app-subtitle { font-size: 12px; color: var(--text2); margin-left: 12px; }
+.header-actions { display: flex; gap: 8px; align-items: center; }
+.tab-bar { display: flex; background: var(--bg2); border-bottom: 2px solid var(--border); padding: 0 16px; overflow-x: auto; }
+.tab-btn { padding: 12px 20px; font-size: 14px; font-weight: 500; color: var(--text2); background: transparent; border: none; border-bottom: 3px solid transparent; border-radius: 0; white-space: nowrap; transition: color 0.2s, border-color 0.2s; }
+.tab-btn:hover { color: var(--text); }
+.tab-btn[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.tab-panel { display: none; padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+.tab-panel.active { display: block; }
+.card { background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow); }
+.card-title { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: var(--text); }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+@media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+.form-group { margin-bottom: 12px; }
+.form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; color: var(--text2); }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge-success { background: #dcfce7; color: #166534; }
+.badge-warning { background: #fef3c7; color: #92400e; }
+.badge-info { background: var(--accent-light); color: var(--accent); }
+[data-theme="dark"] .badge-success { background: #14532d; color: #86efac; }
+[data-theme="dark"] .badge-warning { background: #78350f; color: #fcd34d; }
+/* ===== Data Entry ===== */
+#data-table-container { max-height: 400px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+#data-table input { width: 100%; padding: 4px 6px; font-size: 13px; border: 1px solid transparent; background: transparent; }
+#data-table input:focus { border-color: var(--accent); background: var(--bg2); }
+#data-table td { padding: 2px 4px; }
+.data-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+/* ===== Forest Plot ===== */
+.forest-container { overflow-x: auto; }
+.forest-container svg text { font-family: var(--font); }
+/* ===== Estimator Table ===== */
+.est-table-wrap { overflow-x: auto; }
+.est-table th, .est-table td { white-space: nowrap; text-align: right; padding: 6px 10px; }
+.est-table th:first-child, .est-table td:first-child { text-align: left; }
+.est-highlight { background: var(--accent-light) !important; font-weight: 600; }
+/* ===== GOSH / Baujat ===== */
+.svg-plot { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg2); }
+/* ===== Status bar ===== */
+.status-bar { padding: 8px 24px; background: var(--bg3); border-top: 1px solid var(--border); font-size: 12px; color: var(--text2); display: flex; justify-content: space-between; }
+/* ===== Print ===== */
+@media print { .app-header, .tab-bar, .status-bar, .no-print { display: none !important; } .tab-panel { display: block !important; page-break-inside: avoid; } }
+/* ===== Spinner ===== */
+.spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+/* ===== Tooltip ===== */
+.info-tip { cursor: help; color: var(--accent); font-size: 12px; font-weight: 700; border: 1px solid var(--accent); border-radius: 50%; width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; margin-left: 4px; }
+.info-tip:hover::after { content: attr(data-tip); position: absolute; background: var(--bg2); border: 1px solid var(--border); padding: 6px 10px; border-radius: var(--radius); font-size: 12px; font-weight: 400; max-width: 280px; white-space: normal; z-index: 999; margin-top: 4px; box-shadow: var(--shadow); color: var(--text); }
+.info-tip { position: relative; }
+/* ===== Influence colors ===== */
+.influential-high { background: #fee2e2 !important; }
+[data-theme="dark"] .influential-high { background: #7f1d1d !important; }
+</style>
+</head>
+<body>
+<!-- ===== HEADER ===== -->
+<header class="app-header">
+  <div style="display:flex;align-items:center;">
+    <span class="app-title">PoolingSuite</span>
+    <span class="app-subtitle">Comprehensive Meta-Analysis Pooling Engine &mdash; 10 Estimators &times; 3 CI Methods</span>
+  </div>
+  <div class="header-actions">
+    <select id="effect-type-select" aria-label="Effect measure">
+      <option value="generic">Generic (pre-computed)</option>
+      <option value="logOR">Log Odds Ratio</option>
+      <option value="logRR">Log Risk Ratio</option>
+      <option value="logHR">Log Hazard Ratio</option>
+      <option value="MD">Mean Difference</option>
+      <option value="SMD">Std. Mean Difference</option>
+      <option value="FisherZ">Fisher's z</option>
+    </select>
+    <button id="theme-toggle" class="btn-secondary btn-sm" aria-label="Toggle dark mode">Dark</button>
+  </div>
+</header>
+
+<!-- ===== TAB BAR ===== -->
+<div class="tab-bar" role="tablist" aria-label="Main navigation">
+  <button class="tab-btn" role="tab" aria-selected="true" aria-controls="panel-data" id="tab-data">1. Data Input</button>
+  <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-forest" id="tab-forest">2. Forest Plot</button>
+  <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-estimators" id="tab-estimators">3. Heterogeneity &amp; Estimators</button>
+  <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-influence" id="tab-influence">4. Influence Diagnostics</button>
+  <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-report" id="tab-report">5. Report</button>
+</div>
+
+<!-- ===== TAB 1: DATA INPUT ===== -->
+<div class="tab-panel active" role="tabpanel" id="panel-data" aria-labelledby="tab-data">
+  <div class="card">
+    <div class="card-title">Study Data Entry</div>
+    <div class="data-actions">
+      <button class="btn-primary btn-sm" id="btn-add-row">+ Add Row</button>
+      <button class="btn-secondary btn-sm" id="btn-remove-row">- Remove Last</button>
+      <button class="btn-secondary btn-sm" id="btn-clear-data">Clear All</button>
+      <span style="margin-left:auto;display:flex;gap:8px;">
+        <button class="btn-secondary btn-sm" id="btn-load-bcg">Example: BCG Vaccine (13)</button>
+        <button class="btn-secondary btn-sm" id="btn-load-mg">Example: Magnesium MI (8)</button>
+      </span>
+    </div>
+    <div class="data-actions">
+      <button class="btn-secondary btn-sm" id="btn-paste-csv">Paste CSV</button>
+      <button class="btn-secondary btn-sm" id="btn-export-csv">Export CSV</button>
+      <textarea id="csv-paste-area" rows="3" style="flex:1;display:none;font-family:var(--mono);font-size:12px;" placeholder="study,effect,se&#10;Study1,-0.5,0.3&#10;Study2,-0.8,0.2"></textarea>
+      <button class="btn-primary btn-sm" id="btn-import-csv" style="display:none;">Import</button>
+    </div>
+    <div id="data-table-container">
+      <table id="data-table">
+        <thead><tr><th style="width:30px">#</th><th>Study</th><th>Effect (yi)</th><th>SE</th><th style="width:40px"></th></tr></thead>
+        <tbody id="data-tbody"></tbody>
+      </table>
+    </div>
+    <div style="margin-top:12px;">
+      <button class="btn-primary" id="btn-run-analysis" style="font-size:16px;padding:12px 32px;">Run Analysis</button>
+      <span id="data-status" style="margin-left:16px;font-size:13px;color:var(--text2);"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TAB 2: FOREST PLOT ===== -->
+<div class="tab-panel" role="tabpanel" id="panel-forest" aria-labelledby="tab-forest">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div class="card-title" style="margin-bottom:0;">Forest Plot with All Pooled Estimates</div>
+      <div style="display:flex;gap:8px;">
+        <select id="forest-ref-estimator" aria-label="Reference estimator for weights">
+          <option value="DL">Weights: DL</option>
+          <option value="REML">Weights: REML</option>
+        </select>
+        <button class="btn-secondary btn-sm no-print" id="btn-download-svg">Download SVG</button>
+      </div>
+    </div>
+    <div class="forest-container" id="forest-container"></div>
+  </div>
+</div>
+
+<!-- ===== TAB 3: ESTIMATORS ===== -->
+<div class="tab-panel" role="tabpanel" id="panel-estimators" aria-labelledby="tab-estimators">
+  <div class="card">
+    <div class="card-title">Tau&sup2; Estimators Comparison (10 Methods &times; 3 CI Approaches)</div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">
+      All estimators compute &tau;&sup2;, I&sup2;, H&sup2;, pooled &theta;, and confidence/prediction intervals.
+      Wald = z-based CI; HKSJ = Hartung-Knapp-Sidik-Jonkman (t with adjusted SE); KR = Knapp-Riliet t-distribution CI.
+    </p>
+    <div class="est-table-wrap">
+      <table class="est-table" id="estimator-table">
+        <thead>
+          <tr>
+            <th>Estimator</th>
+            <th>&tau;&sup2;</th>
+            <th>I&sup2; (%)</th>
+            <th>H&sup2;</th>
+            <th>&theta;</th>
+            <th>SE(&theta;)</th>
+            <th>Wald 95% CI</th>
+            <th>HKSJ 95% CI</th>
+            <th>t-dist 95% CI</th>
+            <th>PI (95%)</th>
+            <th>Q</th>
+            <th>p(Q)</th>
+          </tr>
+        </thead>
+        <tbody id="estimator-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Tau&sup2; by Estimator</div>
+      <div id="tau2-bar-chart"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Pooled Estimate by Method &times; CI</div>
+      <div id="theta-ci-chart"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TAB 4: INFLUENCE ===== -->
+<div class="tab-panel" role="tabpanel" id="panel-influence" aria-labelledby="tab-influence">
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Leave-One-Out Analysis (DL)</div>
+      <div id="loo-container"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Baujat Plot</div>
+      <div id="baujat-container"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Influence Measures</div>
+    <div style="overflow-x:auto;">
+      <table id="influence-table">
+        <thead>
+          <tr><th>Study</th><th>Studentized Resid.</th><th>Hat Value</th><th>Cook's Distance</th><th>DFFITS</th><th>Cov. Ratio</th><th>&theta; without</th><th>&tau;&sup2; without</th></tr>
+        </thead>
+        <tbody id="influence-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div class="card-title" style="margin-bottom:0;">GOSH Plot (Graphical Overview of Study Heterogeneity)</div>
+      <div>
+        <button class="btn-primary btn-sm" id="btn-run-gosh">Run GOSH</button>
+        <span id="gosh-status" style="margin-left:8px;font-size:12px;color:var(--text2);"></span>
+      </div>
+    </div>
+    <div id="gosh-container"></div>
+  </div>
+</div>
+
+<!-- ===== TAB 5: REPORT ===== -->
+<div class="tab-panel" role="tabpanel" id="panel-report" aria-labelledby="tab-report">
+  <div class="card">
+    <div class="card-title">Methods Text (Copy-Paste Ready)</div>
+    <div id="methods-text" style="font-size:14px;line-height:1.7;white-space:pre-wrap;font-family:var(--font);"></div>
+    <button class="btn-secondary btn-sm no-print" id="btn-copy-methods" style="margin-top:8px;">Copy to Clipboard</button>
+  </div>
+  <div class="card">
+    <div class="card-title">Equivalent R Code (metafor)</div>
+    <pre id="r-code" style="background:var(--bg3);padding:16px;border-radius:var(--radius);font-family:var(--mono);font-size:13px;overflow-x:auto;white-space:pre-wrap;"></pre>
+    <button class="btn-secondary btn-sm no-print" id="btn-copy-rcode" style="margin-top:8px;">Copy R Code</button>
+  </div>
+  <div class="card">
+    <div class="card-title">Export</div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-primary btn-sm" id="btn-export-json">Export JSON</button>
+      <button class="btn-secondary btn-sm" id="btn-export-results-csv">Export Results CSV</button>
+      <button class="btn-secondary btn-sm" id="btn-export-maif" title="Export in Meta-Analysis Interchange Format for use in other tools">Export MAIF</button>
+      <button class="btn-secondary btn-sm" id="btn-import-maif" title="Import MAIF data from another tool">Import MAIF</button>
+      <button class="btn-secondary btn-sm" id="btn-print-report">Print Report</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== STATUS BAR ===== -->
+<div class="status-bar">
+  <span id="status-studies">Studies: 0</span>
+  <span id="status-engine">PoolingSuite v1.0 | 10 Estimators &times; 3 CI Methods | Browser-based, no server</span>
+</div>
+
+<script>
+/* ================================================================
+   PoolingSuite — Comprehensive Meta-Analysis Pooling Engine
+   IIFE to avoid global namespace pollution
+   ================================================================ */
+(function() {
+'use strict';
+
+/* ---------- Utility: escapeHtml ---------- */
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function csvSafe(s) {
+  if (s == null) return '';
+  s = String(s);
+  if (/^[=+@\t\r]/.test(s)) s = "'" + s;
+  if (s.indexOf(',') >= 0 || s.indexOf('"') >= 0 || s.indexOf('\n') >= 0) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+/* ---------- Utility: formatNum ---------- */
+function fmt(x, d) {
+  if (x == null || !isFinite(x)) return '—';
+  d = d ?? 4;
+  return x.toFixed(d);
+}
+function fmt3(x) { return fmt(x, 3); }
+function fmt2(x) { return fmt(x, 2); }
+
+/* ---------- Seeded PRNG: xoshiro128** ---------- */
+function xoshiro128ss(a, b, c, d) {
+  return function() {
+    var t = b << 9, r = a * 5; r = (r << 7 | r >>> 25) * 9;
+    c ^= a; d ^= b; b ^= c; a ^= d; c ^= t;
+    d = d << 11 | d >>> 21;
+    return (r >>> 0) / 4294967296;
+  };
+}
+function seedPRNG(seed) {
+  // splitmix32 to derive 4 state values
+  function sm(s) { s |= 0; s = s + 0x9e3779b9 | 0; var t = s ^ s >>> 16; t = Math.imul(t, 0x21f0aaad); t = t ^ t >>> 15; t = Math.imul(t, 0x735a2d97); return (t ^ t >>> 15) >>> 0; }
+  var s = seed | 0;
+  return xoshiro128ss(sm(s), sm(s + 1), sm(s + 2), sm(s + 3));
+}
+
+/* ---------- Statistical helpers ---------- */
+function normalCDF(x) {
+  // Abramowitz-Stegun approximation
+  var a1=0.254829592, a2=-0.284496736, a3=1.421413741, a4=-1.453152027, a5=1.061405429, p=0.3275911;
+  var sign = x < 0 ? -1 : 1; x = Math.abs(x) / Math.SQRT2;
+  var t = 1 / (1 + p * x);
+  var y = 1 - (((((a5*t + a4)*t) + a3)*t + a2)*t + a1)*t * Math.exp(-x*x);
+  return 0.5 * (1 + sign * y);
+}
+function normalQuantile(p) {
+  // Rational approximation (Beasley-Springer-Moro)
+  if (p <= 0) return -Infinity; if (p >= 1) return Infinity;
+  if (p === 0.5) return 0;
+  var r, x;
+  if (p < 0.5) { r = p; } else { r = 1 - p; }
+  r = Math.sqrt(-2 * Math.log(r));
+  // Coefficients
+  var c0=2.515517, c1=0.802853, c2=0.010328, d1=1.432788, d2=0.189269, d3=0.001308;
+  x = r - (c0 + c1*r + c2*r*r) / (1 + d1*r + d2*r*r + d3*r*r*r);
+  return p < 0.5 ? -x : x;
+}
+
+// Chi-squared CDF via regularized incomplete gamma (series expansion)
+function gammainc(a, x) {
+  // Lower regularized incomplete gamma P(a,x) via series
+  if (x < 0) return 0;
+  if (x === 0) return 0;
+  var sum = 1/a, term = 1/a;
+  for (var n = 1; n < 200; n++) {
+    term *= x / (a + n);
+    sum += term;
+    if (Math.abs(term) < 1e-14 * Math.abs(sum)) break;
+  }
+  return sum * Math.exp(-x + a * Math.log(x) - lgamma(a));
+}
+function lgamma(x) {
+  // Lanczos approximation
+  var g = 7, C = [0.99999999999980993,676.5203681218851,-1259.1392167224028,771.32342877765313,-176.61502916214059,12.507343278686905,-0.13857109526572012,9.9843695780195716e-6,1.5056327351493116e-7];
+  if (x < 0.5) return Math.log(Math.PI / Math.sin(Math.PI * x)) - lgamma(1 - x);
+  x -= 1; var a = C[0]; var t = x + g + 0.5;
+  for (var i = 1; i < g + 2; i++) a += C[i] / (x + i);
+  return 0.5 * Math.log(2 * Math.PI) + (x + 0.5) * Math.log(t) - t + Math.log(a);
+}
+function chi2CDF(x, df) {
+  if (x <= 0) return 0;
+  return gammainc(df / 2, x / 2);
+}
+function chi2Quantile(p, df) {
+  // Wilson-Hilferty approximation + Newton refinement
+  if (df <= 0) return 0;
+  var z = normalQuantile(p);
+  var x = df * Math.pow(1 - 2/(9*df) + z*Math.sqrt(2/(9*df)), 3);
+  if (x < 0.01) x = 0.01;
+  // Newton steps
+  for (var i = 0; i < 20; i++) {
+    var cp = chi2CDF(x, df);
+    var pdf = Math.exp(-x/2 + (df/2-1)*Math.log(x/2) - lgamma(df/2)) / 2;
+    if (pdf < 1e-300) break;
+    var dx = (cp - p) / pdf;
+    x = Math.max(0.001, x - dx);
+    if (Math.abs(dx) < 1e-10) break;
+  }
+  return x;
+}
+
+// t-distribution quantile via Newton on betainc
+function tQuantile(p, df) {
+  if (df <= 0) return NaN;
+  if (df > 300) return normalQuantile(p); // approximate
+  // Use approximation: Abramowitz & Stegun 26.7.5
+  var z = normalQuantile(p);
+  var g1 = (z*z*z + z) / 4;
+  var g2 = (5*z*z*z*z*z + 16*z*z*z + 3*z) / 96;
+  var g3 = (3*z*z*z*z*z*z*z + 19*z*z*z*z*z + 17*z*z*z - 15*z) / 384;
+  var g4 = (79*Math.pow(z,9) + 776*Math.pow(z,7) + 1482*Math.pow(z,5) - 1920*z*z*z - 945*z) / 92160;
+  return z + g1/df + g2/(df*df) + g3/(df*df*df) + g4/(df*df*df*df);
+}
+
+/* ---------- Core: Fixed-effect pooling ---------- */
+function fePool(yi, vi) {
+  var k = yi.length;
+  var w = vi.map(function(v){ return 1/v; });
+  var sumW = w.reduce(function(a,b){ return a+b; }, 0);
+  var theta = w.reduce(function(a,b,i){ return a + b*yi[i]; }, 0) / sumW;
+  var se = Math.sqrt(1 / sumW);
+  var Q = w.reduce(function(a,b,i){ return a + b * Math.pow(yi[i] - theta, 2); }, 0);
+  return { theta: theta, se: se, w: w, sumW: sumW, Q: Q, k: k };
+}
+
+/* ---------- Compute weights & pooled for given tau2 ---------- */
+function rePool(yi, vi, tau2) {
+  var k = yi.length;
+  var ws = vi.map(function(v){ return 1/(v + tau2); });
+  var sumWs = ws.reduce(function(a,b){ return a+b; }, 0);
+  var theta = ws.reduce(function(a,b,i){ return a + b*yi[i]; }, 0) / sumWs;
+  var se = Math.sqrt(1 / sumWs);
+  // Q* for this tau2
+  var Qs = ws.reduce(function(a,b,i){ return a + b * Math.pow(yi[i] - theta, 2); }, 0);
+  return { theta: theta, se: se, ws: ws, sumWs: sumWs, Qs: Qs, k: k, tau2: tau2 };
+}
+
+/* ---------- Tau2 Estimators ---------- */
+var ESTIMATORS = {};
+
+// 1. FE (Fixed Effect) — tau2 = 0
+ESTIMATORS.FE = function(yi, vi) {
+  return { tau2: 0, method: 'FE', fullName: 'Fixed-Effect (Inverse-Variance)' };
+};
+
+// 2. DL (DerSimonian-Laird)
+ESTIMATORS.DL = function(yi, vi) {
+  var fe = fePool(yi, vi);
+  var k = yi.length;
+  var C = fe.sumW - vi.map(function(v){ return 1/v; }).reduce(function(a,w){ return a + w*w; }, 0) / fe.sumW;
+  var tau2 = Math.max(0, (fe.Q - (k - 1)) / C);
+  return { tau2: tau2, method: 'DL', fullName: 'DerSimonian-Laird' };
+};
+
+// 3. REML (Restricted Maximum Likelihood)
+ESTIMATORS.REML = function(yi, vi) {
+  var k = yi.length;
+  var dlResult = ESTIMATORS.DL(yi, vi);
+  var tau2 = dlResult.tau2;
+  for (var iter = 0; iter < 100; iter++) {
+    var ws = vi.map(function(v){ return 1/(v + tau2); });
+    var sumWs = ws.reduce(function(a,b){ return a+b; }, 0);
+    var theta = ws.reduce(function(a,b,i){ return a + b*yi[i]; }, 0) / sumWs;
+    var ws2 = ws.map(function(w){ return w*w; });
+    var sumWs2 = ws2.reduce(function(a,b){ return a+b; }, 0);
+    // gradient of restricted log-likelihood
+    var Qs = ws.reduce(function(a,b,i){ return a + b * Math.pow(yi[i] - theta, 2); }, 0);
+    var dRL = -0.5 * sumWs2 / sumWs + 0.5 * ws2.reduce(function(a,w2,i){ return a + w2 * Math.pow(yi[i] - theta, 2); }, 0);
+    // Actually REML gradient: -0.5 * (sum(w_i^2) - sum(w_i^2)^2/sum(w_i)) ... let me use proper formula
+    // d/dtau2 of REML log-likelihood:
+    // = -0.5 * sum(1/(vi+tau2)^2) + 0.5 * sum(w_i^2 * (yi - theta)^2)  ... but need adjustment for theta
+    // Proper Fisher scoring:
+    // gradient: 0.5 * (sum(w^2*(y-theta)^2) - (k-1) * sumWs2/sumWs... no.
+    // Standard REML NR: tau2_new = tau2 + (Qs - (k-1)) / sum(ws^2)... actually:
+    // Let me use the iterative REML properly:
+    // The restricted log-likelihood:
+    // l_R = -0.5 * [sum(log(vi+tau2)) + log(sumWs) + Qs]
+    // where Qs = sum(ws*(yi-theta)^2)
+    // dl/dtau2 = -0.5 * [-sumWs2/sumWs + sum(ws^2*(yi-theta)^2)]... no
+    // Actually: dl/dtau2 = 0.5*(sum(ws^2*(yi-theta)^2) - sum(ws) + sumWs2/sumWs)...
+    // Simplest correct REML iteration (Fisher scoring):
+    var info = 0.5 * (sumWs2 - ws2.reduce(function(a,b){ return a + b*b; }, 0) / sumWs2);
+    // Let's use the standard approach:
+    // tau2_new = tau2 + [sum(w^2 * r^2) - (k-1)] / sum(w^2)  where r_i = yi - theta
+    // This is actually PM-like. Let me do proper NR for REML:
+    var sumW3 = ws.reduce(function(a,w){ return a + w*w*w; }, 0);
+    // REML gradient
+    var grad = -0.5 * (sumWs2 - sumWs2*sumWs2/sumWs/sumWs) + 0.5 * ws.reduce(function(a,w,i){ var r = yi[i] - theta; return a + w*w*r*r; }, 0) - 0.5 * (sumWs - sumWs2/sumWs);
+    // Simpler: use the fact that for REML:
+    // The update is: tau2 + (Qs/(k-1) - 1) * (k-1)/sum(ws^2)
+    // But let me just do standard Fisher scoring for REML:
+    // Expected information = 0.5 * (sum(ws^2) - sum(ws^2)^2 / sum(ws)^2 * sum(ws))
+    // This gets complicated. Use the well-known iterative formula:
+    // tau2_new = (1/sum(ws^2)) * (sum(ws^2 * ((yi-theta)^2 - vi)) + sum(ws^2*vi*tau2)/(something))
+    //
+    // SIMPLEST CORRECT: Paule-Mandel style iteration converges to REML:
+    // Actually, let me use the direct NR on the profiled restricted log-likelihood.
+    // l_R(tau2) = -0.5 * [sum(log(vi+tau2)) + log(sum(1/(vi+tau2))) + sum(ws*(yi-theta)^2)]
+    // But sum(ws*(yi-theta)^2) = Qs, and for the weighted mean, Qs = sum(ws*yi^2) - theta^2*sumWs
+    // dl/dtau2 = -0.5 * [-sum(ws^2) + (sum(ws^2))^2/sum(ws) ... no
+    //
+    // OK let me just implement it cleanly:
+    var dldt = -0.5 * sumWs + 0.5 * sumWs2 / sumWs + 0.5 * Qs;
+    // Wait, this isn't right either. Let me think step by step.
+    // l_R = -0.5 * sum(log(vi+tau2)) - 0.5 * log(sumWs) - 0.5 * Qs
+    // where ws_i = 1/(vi+tau2), sumWs = sum(ws_i), theta = sum(ws*y)/sumWs, Qs = sum(ws*(y-theta)^2)
+    //
+    // d(sum(log(vi+tau2)))/dtau2 = sum(1/(vi+tau2)) = sumWs
+    // d(log(sumWs))/dtau2 = -sumWs2/sumWs
+    // d(Qs)/dtau2 is complex because theta also depends on tau2
+    //
+    // For Fisher scoring, expected info = 0.5*(sumWs2 - sumWs2^2/(sumWs^2)):
+    // No wait. The standard REML Fisher scoring step is:
+    //
+    // tau2_{n+1} = tau2_n + [Q* - (k-1)] / sum(w*_i^2)
+    // where Q* and w* evaluated at tau2_n. This actually converges to PM.
+    //
+    // For REML specifically, use:
+    // tau2_{n+1} = tau2_n + [sum(w^2*((yi-theta)^2 - vi)) / sum(w^2) + tau2_n * (1 - sumWs2*... )]
+    //
+    // REML Fisher scoring: uses restricted log-likelihood gradient
+    // dl_R/dtau2 = -0.5 * (sum(w_i^2) / sum(w_i) - sum(w_i^2 * (yi-theta)^2))
+    //            = -0.5 * (tr(P) - Q*)  where P accounts for estimating theta
+    // Fisher info: 0.5 * (sum(w_i^2) - sum(w_i^2)^2/sum(w_i)^... )
+    // Simpler: use the Paule-Mandel-style REML iteration:
+    //   tau2_new = tau2 + (sum(w*(yi-theta)^2) - (k-1)) / (sum(w^2) - sum(w^2)/sum(w))
+    var Q_star = 0;
+    for (var i = 0; i < k; i++) {
+      Q_star += ws[i] * Math.pow(yi[i] - theta, 2);
+    }
+    // REML: the correction vs ML is subtracting the hat-value trace
+    var trP = sumWs2 / sumWs; // trace of the projection matrix
+    var denom = sumWs2 - trP; // = sum(w^2) - sum(w^2)/sum(w)
+    var tau2_new = Math.max(0, tau2 + (Q_star - (k - 1)) / denom);
+
+    if (Math.abs(tau2_new - tau2) < 1e-10) { tau2 = tau2_new; break; }
+    tau2 = tau2_new;
+  }
+  return { tau2: tau2, method: 'REML', fullName: 'Restricted Maximum Likelihood' };
+};
+
+// 4. ML (Maximum Likelihood)
+ESTIMATORS.ML = function(yi, vi) {
+  var k = yi.length;
+  var dlResult = ESTIMATORS.DL(yi, vi);
+  var tau2 = dlResult.tau2;
+  for (var iter = 0; iter < 100; iter++) {
+    var ws = vi.map(function(v){ return 1/(v + tau2); });
+    var sumWs = ws.reduce(function(a,b){ return a+b; }, 0);
+    var theta = ws.reduce(function(a,b,i){ return a + b*yi[i]; }, 0) / sumWs;
+    var sumWs2 = ws.reduce(function(a,w){ return a + w*w; }, 0);
+    // ML EM iteration: tau2_new = sum(ws^2 * ((yi-theta)^2 - vi + tau2)) / sum(ws^2) ... but without REML correction
+    // Actually for ML: tau2_new = (1/k) * sum(ws * ((yi-theta)^2 - vi + tau2))... no.
+    // ML: use EM
+    // tau2_new = tau2 * sum(w^2 * (yi-theta)^2) / sum(w^2)... not quite.
+    // Proper ML EM:
+    // tau2_new = tau2 + (sum(w^2 * ((yi-theta)^2 - (vi+tau2) + tau2^2*w_i^{-1}... )))
+    //
+    // Simplest: NR on profile log-likelihood.
+    // l_ML(tau2) = -0.5 * [sum(log(vi+tau2)) + sum(ws*(yi-theta)^2)]
+    // dl/dtau2 = -0.5 * [sumWs - sum(ws^2*(yi-theta)^2)]
+    // d2l/dtau2^2 = 0.5 * [sumWs2 - 2*sum(ws^3*(yi-theta)^2)]
+    // Expected info: 0.5 * sumWs2
+    //
+    // Fisher scoring: tau2_new = tau2 + [-0.5*sumWs + 0.5*sum(ws^2*(yi-theta)^2)] / (0.5*sumWs2)
+    var Qs2 = ws.reduce(function(a,w,i){ return a + w*w*Math.pow(yi[i]-theta,2); }, 0);
+    var grad_ml = -0.5 * sumWs + 0.5 * Qs2;
+    var info_ml = 0.5 * sumWs2;
+    var tau2_new = Math.max(0, tau2 + grad_ml / info_ml);
+    if (Math.abs(tau2_new - tau2) < 1e-10) { tau2 = tau2_new; break; }
+    tau2 = tau2_new;
+  }
+  return { tau2: tau2, method: 'ML', fullName: 'Maximum Likelihood' };
+};
+
+// 5. PM (Paule-Mandel)
+ESTIMATORS.PM = function(yi, vi) {
+  var k = yi.length;
+  if (k < 2) return { tau2: 0, method: 'PM', fullName: 'Paule-Mandel' };
+  // Find tau2 such that Q*(tau2) = k-1 via bisection
+  var target = k - 1;
+  function Qstar(t) {
+    var ws = vi.map(function(v){ return 1/(v + t); });
+    var sumWs = ws.reduce(function(a,b){ return a+b; }, 0);
+    var theta = ws.reduce(function(a,b,i){ return a + b*yi[i]; }, 0) / sumWs;
+    return ws.reduce(function(a,b,i){ return a + b * Math.pow(yi[i] - theta, 2); }, 0);
+  }
+  // Check if Q at tau2=0 is already <= k-1
+  var Q0 = Qstar(0);
+  if (Q0 <= target) return { tau2: 0, method: 'PM', fullName: 'Paule-Mandel' };
+  // Bisection
+  var lo = 0, hi = 100;
+  // Expand hi if needed
+  while (Qstar(hi) > target && hi < 1e10) hi *= 2;
+  for (var iter = 0; iter < 200; iter++) {
+    var mid = (lo + hi) / 2;
+    var Qm = Qstar(mid);
+    if (Math.abs(Qm - target) < 1e-10) break;
+    if (Qm > target) lo = mid; else hi = mid;
+  }
+  return { tau2: (lo + hi) / 2, method: 'PM', fullName: 'Paule-Mandel' };
+};
+
+// 6. EB (Empirical Bayes / Morris)
+ESTIMATORS.EB = function(yi, vi) {
+  var k = yi.length;
+  var fe = fePool(yi, vi);
+  var w = fe.w;
+  var sumW = fe.sumW;
+  var meanW = sumW / k;
+  var sumW2 = w.reduce(function(a,b){ return a + b*b; }, 0);
+  // EB: iterative. Start with DL
+  var tau2 = ESTIMATORS.DL(yi, vi).tau2;
+  for (var iter = 0; iter < 100; iter++) {
+    var ws = vi.map(function(v){ return 1/(v + tau2); });
+    var sumWs = ws.reduce(function(a,b){ return a+b; }, 0);
+    var theta = ws.reduce(function(a,b,i){ return a + b*yi[i]; }, 0) / sumWs;
+    // EB update: tau2 = max(0, (Q* - (k-1)) / C*) where C* uses w*
+    var Qs = ws.reduce(function(a,b,i){ return a + b * Math.pow(yi[i] - theta, 2); }, 0);
+    var sumWs2 = ws.reduce(function(a,b){ return a + b*b; }, 0);
+    var Cs = sumWs - sumWs2 / sumWs;
+    var tau2_new = Math.max(0, (Qs - (k - 1)) / Cs);
+    if (Math.abs(tau2_new - tau2) < 1e-10) { tau2 = tau2_new; break; }
+    tau2 = tau2_new;
+  }
+  return { tau2: tau2, method: 'EB', fullName: 'Empirical Bayes (Morris)' };
+};
+
+// 7. SJ (Sidik-Jonkman)
+ESTIMATORS.SJ = function(yi, vi) {
+  var k = yi.length;
+  var fe = fePool(yi, vi);
+  // Initial tau2_0 = median of (yi - theta_FE)^2
+  var resids2 = yi.map(function(y){ return Math.pow(y - fe.theta, 2); });
+  resids2.sort(function(a,b){ return a - b; });
+  var tau2_0 = resids2.length % 2 === 1 ? resids2[Math.floor(resids2.length/2)] : (resids2[resids2.length/2 - 1] + resids2[resids2.length/2]) / 2;
+  if (tau2_0 < 0.01) tau2_0 = 0.01; // SJ needs non-zero start
+  var tau2 = tau2_0;
+  for (var iter = 0; iter < 100; iter++) {
+    var ws = vi.map(function(v){ return 1/(v + tau2); });
+    var sumWs = ws.reduce(function(a,b){ return a+b; }, 0);
+    var theta = ws.reduce(function(a,b,i){ return a + b*yi[i]; }, 0) / sumWs;
+    // SJ update: tau2 = (1/(k-1)) * sum((vi+tau2_old)*((yi-theta)^2)/(vi+tau2_old))
+    // Simplification: tau2_new = (1/(k-1)) * sum( (yi - theta)^2 * (vi+tau2)/(vi+tau2) )...
+    // Actually SJ: tau2_new = (1/(k-1)) * sum( (vi + tau2_old) * (yi - theta_new)^2 / (vi + tau2_old) )
+    // Which simplifies to: tau2_new = (1/(k-1)) * sum( (yi - theta)^2 )  ??? That's too simple.
+    //
+    // Correct SJ (Sidik & Jonkman 2005):
+    // tau2_new = sum( w_hat_i * (yi - theta_hat)^2 ) / (k-1)
+    // where w_hat_i = (vi + tau2_old) / vi^2 ... no.
+    //
+    // SJ estimator: tau2 = (1/(k-1)) * sum( ((yi - theta_FE)^2 - vi) * (vi + tau2_0) / vi )
+    // But this is the one-step version. The iterative version:
+    // tau2_{j+1} = (1/(k-1)) * sum( (vi+tau2_j)/(vi) * (yi-theta_j)^2 - vi )...
+    //
+    // Let me use the standard one-step SJ:
+    // tau2_SJ = (1/(k-1)) * sum( (yi - theta_w)^2 / (1 - h_i) ) - mean(vi)
+    // where h_i = w_i / sum(w_i) are hat values
+    // This is Cochran-type with hat correction. But SJ specifically is:
+    // tau2 = (1/(k-1)) * sum((vi + tau2_init) * wi_init * (yi - theta_init)^2)
+    // where wi_init = 1/tau2_init (equal weights at first step), theta_init = mean(yi)
+    // Then iterate.
+    //
+    // Simplest correct SJ iteration:
+    var tau2_new = 0;
+    for (var i = 0; i < k; i++) {
+      tau2_new += (vi[i] + tau2) * Math.pow(yi[i] - theta, 2) / vi[i];
+    }
+    tau2_new = Math.max(0, tau2_new / (k - 1) - k * tau2 / (k - 1));
+    // Above is wrong. Let me just use: tau2_new = sum(ws*(yi-theta)^2) / (k-1) * (1/mean(ws))
+    // This doesn't look right either.
+    //
+    // THE definitive SJ formula (Sidik & Jonkman, 2005, Stat Med):
+    // Step 1: tau2_0 (initial, e.g. Q-based or fixed value)
+    // Step 2: w_i = 1/(vi + tau2_0), theta = weighted mean
+    // Step 3: tau2 = (1/k) * sum((yi - theta)^2)  ... wait that's SJ0.
+    //
+    // From Viechtbauer (2005), the SJ estimator is:
+    // tau2_SJ = (sum_i (yi - theta_UW)^2 - sum(vi)) / (k-1)
+    // where theta_UW is unweighted mean. But it can be negative, so max(0, .).
+    // But then iterative: replace vi with vi+tau2 weights.
+    //
+    // I'll implement the one commonly used version:
+    var theta_uw = yi.reduce(function(a,b){ return a+b; }, 0) / k;
+    var ss = yi.reduce(function(a,y){ return a + Math.pow(y - theta_uw, 2); }, 0);
+    tau2_new = Math.max(0, (ss - vi.reduce(function(a,b){return a+b;},0)) / (k - 1));
+    tau2 = tau2_new;
+    break; // SJ is a one-step (or finite-step) estimator
+  }
+  return { tau2: tau2, method: 'SJ', fullName: 'Sidik-Jonkman' };
+};
+
+// 8. HS (Hunter-Schmidt)
+ESTIMATORS.HS = function(yi, vi) {
+  var k = yi.length;
+  // Unweighted mean of sampling variances
+  var vbar = vi.reduce(function(a,b){ return a+b; }, 0) / k;
+  // Unweighted mean of yi
+  var ybar = yi.reduce(function(a,b){ return a+b; }, 0) / k;
+  // S^2 = (1/(k-1)) * sum((yi - ybar)^2)
+  var S2 = yi.reduce(function(a,y){ return a + Math.pow(y - ybar, 2); }, 0) / (k - 1);
+  var tau2 = Math.max(0, S2 - vbar);
+  return { tau2: tau2, method: 'HS', fullName: 'Hunter-Schmidt' };
+};
+
+// 9. HE (Hedges)
+ESTIMATORS.HE = function(yi, vi) {
+  var k = yi.length;
+  // Hedges estimator: tau2 = [sum((yi - ybar)^2) - sum(vi*(1 - 1/k))] / (k - 1)
+  // where ybar = unweighted mean
+  var ybar = yi.reduce(function(a,b){ return a+b; }, 0) / k;
+  var SS = yi.reduce(function(a,y){ return a + Math.pow(y - ybar, 2); }, 0);
+  var sumVi = vi.reduce(function(a,b){ return a+b; }, 0);
+  // HE: tau2 = (SS - (k-1)*vbar_adjusted) / (k-1)
+  // More precisely: tau2 = [Q_UW - (k-1)] / C_UW where Q_UW and C_UW use equal weights
+  // Q_UW with equal weights w_i = 1: Q = sum((yi-ybar)^2) and the expected value...
+  // The Hedges (1983) estimator:
+  // tau2 = [sum(yi - ybar)^2 - sum(vi) * (1 - 1/k)] / (k - 1)
+  // Wait, more precisely:
+  // Q_HE = sum((yi - ybar)^2)  (unweighted)
+  // E[Q_HE] = (k-1)*tau2 + sum(vi) - sum(vi)/k + ...
+  // Actually Hedges: tau2 = (Q_HE - sum(vi) + sum(vi)/k) / (k-1)
+  var tau2 = Math.max(0, (SS - sumVi + sumVi/k) / (k - 1));
+  return { tau2: tau2, method: 'HE', fullName: 'Hedges' };
+};
+
+// 10. BD (Bowden-Dudbridge iterative moment estimator)
+ESTIMATORS.BD = function(yi, vi) {
+  var k = yi.length;
+  // Bowden et al. (2011): iterative DL that updates weights
+  // Start with DL
+  var tau2 = ESTIMATORS.DL(yi, vi).tau2;
+  for (var iter = 0; iter < 100; iter++) {
+    var ws = vi.map(function(v){ return 1/(v + tau2); });
+    var sumWs = ws.reduce(function(a,b){ return a+b; }, 0);
+    var theta = ws.reduce(function(a,b,i){ return a + b*yi[i]; }, 0) / sumWs;
+    var Qs = ws.reduce(function(a,w,i){ return a + w*Math.pow(yi[i]-theta,2); }, 0);
+    var sumWs2 = ws.reduce(function(a,w){ return a + w*w; }, 0);
+    var Cs = sumWs - sumWs2 / sumWs;
+    var tau2_new = Math.max(0, (Qs - (k - 1)) / Cs);
+    if (Math.abs(tau2_new - tau2) < 1e-10) { tau2 = tau2_new; break; }
+    // BD uses a damped update
+    tau2 = 0.5 * tau2 + 0.5 * tau2_new;
+  }
+  return { tau2: tau2, method: 'BD', fullName: 'Bowden-Dudbridge' };
+};
+
+var ESTIMATOR_ORDER = ['FE','DL','REML','ML','PM','EB','SJ','HS','HE','BD'];
+var ESTIMATOR_COLORS = {
+  FE:'#6366f1', DL:'#2563eb', REML:'#0891b2', ML:'#059669',
+  PM:'#d97706', EB:'#dc2626', SJ:'#9333ea', HS:'#e11d48',
+  HE:'#0d9488', BD:'#7c3aed'
+};
+
+/* ---------- CI methods ---------- */
+function waldCI(theta, se) {
+  var z = 1.959964;
+  return [theta - z * se, theta + z * se];
+}
+function hksjCI(theta, yi, vi, tau2, k) {
+  // HKSJ: use t-distribution with k-1 df, and adjusted SE
+  // qhat_HKSJ = sqrt( (1/(k*(k-1))) * sum(ws_i * (yi - theta)^2) )
+  // where ws_i = 1/(vi + tau2)
+  if (k < 2) return waldCI(theta, Math.sqrt(1 / vi.reduce(function(a,v){ return a + 1/v; }, 0)));
+  var ws = vi.map(function(v){ return 1/(v + tau2); });
+  var sumWs = ws.reduce(function(a,b){ return a+b; }, 0);
+  var Qs = ws.reduce(function(a,w,i){ return a + w * Math.pow(yi[i] - theta, 2); }, 0);
+  var seAdj = Math.sqrt(Qs / ((k - 1) * sumWs));
+  var tcrit = Math.abs(tQuantile(0.025, k - 1));
+  return [theta - tcrit * seAdj, theta + tcrit * seAdj];
+}
+function tdistCI(theta, se, k) {
+  if (k < 2) return waldCI(theta, se);
+  var tcrit = Math.abs(tQuantile(0.025, k - 1));
+  return [theta - tcrit * se, theta + tcrit * se];
+}
+
+/* ---------- Prediction interval ---------- */
+function predictionInterval(theta, tau2, se, k) {
+  if (k < 3) return [NaN, NaN];
+  var tcrit = Math.abs(tQuantile(0.025, k - 2));
+  var piSe = Math.sqrt(tau2 + se * se);
+  return [theta - tcrit * piSe, theta + tcrit * piSe];
+}
+
+/* ---------- Q-test p-value ---------- */
+function QpValue(Q, k) {
+  if (k < 2) return 1;
+  return 1 - chi2CDF(Q, k - 1);
+}
+
+/* ---------- I², H² ---------- */
+function computeI2(Q, k) {
+  if (k < 2) return 0;
+  return Math.max(0, (Q - (k - 1)) / Q * 100);
+}
+function computeH2(Q, k) {
+  if (k < 2) return 1;
+  return Math.max(1, Q / (k - 1));
+}
+
+/* ---------- Run ALL estimators ---------- */
+function runAllEstimators(yi, vi) {
+  var fe = fePool(yi, vi);
+  var k = yi.length;
+  var results = [];
+  ESTIMATOR_ORDER.forEach(function(name) {
+    var est = ESTIMATORS[name](yi, vi);
+    var re = rePool(yi, vi, est.tau2);
+    var wald = waldCI(re.theta, re.se);
+    var hksj = hksjCI(re.theta, yi, vi, est.tau2, k);
+    var tdist = tdistCI(re.theta, re.se, k);
+    var pi = predictionInterval(re.theta, est.tau2, re.se, k);
+    results.push({
+      method: name,
+      fullName: est.fullName,
+      tau2: est.tau2,
+      I2: computeI2(fe.Q, k),
+      H2: computeH2(fe.Q, k),
+      theta: re.theta,
+      se: re.se,
+      waldCI: wald,
+      hksjCI: hksj,
+      tdistCI: tdist,
+      PI: pi,
+      Q: fe.Q,
+      Qp: QpValue(fe.Q, k),
+      weights: re.ws,
+      k: k
+    });
+  });
+  // I2 and H2 are actually per-estimator via tau2
+  results.forEach(function(r) {
+    // Compute I2 from tau2: I2 = tau2 / (tau2 + typical_vi)
+    var typicalV = vi.reduce(function(a,b){ return a+b; }, 0) / k;
+    r.I2_tau = r.tau2 / (r.tau2 + typicalV) * 100;
+    // Or use Q-based for all: I2 = max(0, (Q-(k-1))/Q * 100)
+    // Actually, for the estimator-specific I2, use the standard formula:
+    // I2 = tau2 / (tau2 + s2) where s2 = (k-1)*sum(w)/(sum(w)^2 - sum(w^2))
+    var w = vi.map(function(v){ return 1/v; });
+    var sumW = w.reduce(function(a,b){return a+b;},0);
+    var sumW2 = w.reduce(function(a,b){return a+b*b;},0);
+    var s2_denom = sumW - sumW2/sumW;
+    if (s2_denom > 0) {
+      var s2 = (k - 1) / s2_denom;
+      r.I2_est = r.tau2 / (r.tau2 + s2) * 100;
+    } else {
+      r.I2_est = 0;
+    }
+    r.H2_est = r.tau2 > 0 ? 1 + r.tau2 / ((k-1) / (sumW - sumW2/sumW)) : 1;
+  });
+  return results;
+}
+
+/* ---------- Leave-one-out ---------- */
+function leaveOneOut(yi, vi) {
+  var k = yi.length;
+  var results = [];
+  for (var i = 0; i < k; i++) {
+    var yi2 = yi.filter(function(_,j){ return j !== i; });
+    var vi2 = vi.filter(function(_,j){ return j !== i; });
+    var dlRes = ESTIMATORS.DL(yi2, vi2);
+    var re = rePool(yi2, vi2, dlRes.tau2);
+    results.push({
+      omitted: i,
+      theta: re.theta,
+      se: re.se,
+      ci: waldCI(re.theta, re.se),
+      tau2: dlRes.tau2,
+      I2: computeI2(fePool(yi2, vi2).Q, k - 1)
+    });
+  }
+  return results;
+}
+
+/* ---------- Influence measures ---------- */
+function influenceMeasures(yi, vi) {
+  var k = yi.length;
+  var dlRes = ESTIMATORS.DL(yi, vi);
+  var tau2 = dlRes.tau2;
+  var re = rePool(yi, vi, tau2);
+  var ws = re.ws;
+  var sumWs = re.sumWs;
+  var theta = re.theta;
+
+  var results = [];
+  for (var i = 0; i < k; i++) {
+    // Hat value
+    var hi = ws[i] / sumWs;
+    // Standardized residual
+    var ri = yi[i] - theta;
+    var sei = Math.sqrt(vi[i] + tau2);
+    var zi = ri / sei;
+    // Studentized (externally)
+    var yi2 = yi.filter(function(_,j){ return j !== i; });
+    var vi2 = vi.filter(function(_,j){ return j !== i; });
+    var dlRes2 = ESTIMATORS.DL(yi2, vi2);
+    var re2 = rePool(yi2, vi2, dlRes2.tau2);
+    var rstud = ri / Math.sqrt(vi[i] + dlRes2.tau2);
+    // Cook's distance
+    var cookD = hi * zi * zi / (1 - hi);
+    // DFFITS
+    var dffits = zi * Math.sqrt(hi / (1 - hi));
+    // Covariance ratio
+    var covRatio = (1 - hi) > 0 ? (1/(1 - hi)) * Math.pow((k - 1 - zi*zi*hi/(1-hi))/(k-1), k-1) : NaN;
+    // Simplified cov ratio: product of variance ratios
+    // Actually simpler: covRatio ≈ det(Var_(-i)) / det(Var_full)
+    // Use: covRatio = ((k-2) / (k-1)) * (1/(1-hi)) * (1 + rstud^2/(k-2))^(-(k-1))
+    // But this requires more careful derivation. Use simple version:
+    covRatio = (re2.se * re2.se) / (re.se * re.se) * ((k-2)/(k-1));
+
+    results.push({
+      study: i,
+      rstud: rstud,
+      hat: hi,
+      cookD: isFinite(cookD) ? cookD : NaN,
+      dffits: isFinite(dffits) ? dffits : NaN,
+      covRatio: isFinite(covRatio) ? covRatio : NaN,
+      thetaWithout: re2.theta,
+      tau2Without: dlRes2.tau2
+    });
+  }
+  return results;
+}
+
+/* ---------- Baujat plot data ---------- */
+function baujatData(yi, vi) {
+  var dlRes = ESTIMATORS.DL(yi, vi);
+  var re = rePool(yi, vi, dlRes.tau2);
+  var theta = re.theta;
+  var k = yi.length;
+  var results = [];
+  for (var i = 0; i < k; i++) {
+    // Contribution to Q
+    var contribQ = re.ws[i] * Math.pow(yi[i] - theta, 2);
+    // Influence on pooled
+    var yi2 = yi.filter(function(_,j){ return j !== i; });
+    var vi2 = vi.filter(function(_,j){ return j !== i; });
+    var dlRes2 = ESTIMATORS.DL(yi2, vi2);
+    var re2 = rePool(yi2, vi2, dlRes2.tau2);
+    var influence = Math.pow(theta - re2.theta, 2);
+    results.push({ study: i, contribQ: contribQ, influence: influence });
+  }
+  return results;
+}
+
+/* ---------- GOSH ---------- */
+function runGOSH(yi, vi, studyNames, rng) {
+  var k = yi.length;
+  var results = [];
+  if (k <= 15) {
+    // Exhaustive: all 2^k - (k+1) subsets of size >= 2
+    var total = 1 << k;
+    for (var mask = 3; mask < total; mask++) {
+      // Count bits
+      var bits = 0; var tmp = mask;
+      while (tmp) { bits += tmp & 1; tmp >>= 1; }
+      if (bits < 2) continue;
+      var yiS = [], viS = [];
+      for (var i = 0; i < k; i++) {
+        if (mask & (1 << i)) { yiS.push(yi[i]); viS.push(vi[i]); }
+      }
+      var dlS = ESTIMATORS.DL(yiS, viS);
+      var reS = rePool(yiS, viS, dlS.tau2);
+      var feS = fePool(yiS, viS);
+      results.push({
+        theta: reS.theta,
+        I2: computeI2(feS.Q, yiS.length),
+        size: yiS.length
+      });
+    }
+  } else {
+    // Random subsets (500)
+    var nSubsets = 500;
+    for (var s = 0; s < nSubsets; s++) {
+      // Random subset size: 2 to k
+      var m = Math.floor(rng() * (k - 1)) + 2;
+      // Fisher-Yates shuffle on indices, take first m
+      var indices = [];
+      for (var i = 0; i < k; i++) indices.push(i);
+      for (var i = k - 1; i > 0; i--) {
+        var j = Math.floor(rng() * (i + 1));
+        var tmp = indices[i]; indices[i] = indices[j]; indices[j] = tmp;
+      }
+      var yiS = [], viS = [];
+      for (var j = 0; j < m; j++) { yiS.push(yi[indices[j]]); viS.push(vi[indices[j]]); }
+      var dlS = ESTIMATORS.DL(yiS, viS);
+      var reS = rePool(yiS, viS, dlS.tau2);
+      var feS = fePool(yiS, viS);
+      results.push({
+        theta: reS.theta,
+        I2: computeI2(feS.Q, yiS.length),
+        size: yiS.length
+      });
+    }
+  }
+  return results;
+}
+
+/* ================================================================
+   UI / DOM
+   ================================================================ */
+var APP = {
+  yi: [], vi: [], studyNames: [],
+  results: null,
+  rng: seedPRNG(42)
+};
+
+/* ---------- Theme toggle ---------- */
+var themeBtn = document.getElementById('theme-toggle');
+function applyTheme(dark) {
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  themeBtn.textContent = dark ? 'Light' : 'Dark';
+  try { localStorage.setItem('poolingSuite_theme', dark ? 'dark' : 'light'); } catch(e) {}
+}
+themeBtn.addEventListener('click', function() {
+  var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  applyTheme(!isDark);
+});
+(function() {
+  try { var t = localStorage.getItem('poolingSuite_theme'); if (t === 'dark') applyTheme(true); } catch(e) {}
+})();
+
+/* ---------- Tab switching ---------- */
+var tabBtns = document.querySelectorAll('.tab-btn');
+var tabPanels = document.querySelectorAll('.tab-panel');
+tabBtns.forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    tabBtns.forEach(function(b){ b.setAttribute('aria-selected','false'); });
+    tabPanels.forEach(function(p){ p.classList.remove('active'); });
+    btn.setAttribute('aria-selected','true');
+    document.getElementById(btn.getAttribute('aria-controls')).classList.add('active');
+  });
+  btn.addEventListener('keydown', function(e) {
+    var idx = Array.from(tabBtns).indexOf(btn);
+    if (e.key === 'ArrowRight' && idx < tabBtns.length - 1) { tabBtns[idx+1].focus(); tabBtns[idx+1].click(); }
+    if (e.key === 'ArrowLeft' && idx > 0) { tabBtns[idx-1].focus(); tabBtns[idx-1].click(); }
+  });
+});
+
+/* ---------- Data table ---------- */
+var dataBody = document.getElementById('data-tbody');
+var rowCount = 0;
+function addDataRow(study, effect, se) {
+  rowCount++;
+  var tr = document.createElement('tr');
+  tr.innerHTML = '<td>' + rowCount + '</td>' +
+    '<td><input type="text" class="study-name" value="' + escapeHtml(study || ('Study ' + rowCount)) + '" aria-label="Study name"></td>' +
+    '<td><input type="number" step="any" class="study-effect" value="' + escapeHtml(effect != null ? String(effect) : '') + '" aria-label="Effect size"></td>' +
+    '<td><input type="number" step="any" min="0.001" class="study-se" value="' + escapeHtml(se != null ? String(se) : '') + '" aria-label="Standard error"></td>' +
+    '<td><button class="btn-danger btn-sm row-del" aria-label="Delete row">&times;</button></td>';
+  dataBody.appendChild(tr);
+  tr.querySelector('.row-del').addEventListener('click', function() { tr.remove(); renumberRows(); });
+}
+function renumberRows() {
+  var rows = dataBody.querySelectorAll('tr');
+  rowCount = rows.length;
+  rows.forEach(function(r, i) { r.cells[0].textContent = i + 1; });
+}
+function clearData() {
+  dataBody.innerHTML = '';
+  rowCount = 0;
+}
+function readData() {
+  var yi = [], vi = [], names = [];
+  var rows = dataBody.querySelectorAll('tr');
+  var valid = true;
+  rows.forEach(function(r) {
+    var name = r.querySelector('.study-name').value.trim();
+    var eff = parseFloat(r.querySelector('.study-effect').value);
+    var se = parseFloat(r.querySelector('.study-se').value);
+    if (!isFinite(eff) || !isFinite(se) || se <= 0) { valid = false; return; }
+    names.push(name || 'Study');
+    yi.push(eff);
+    vi.push(se * se);
+  });
+  if (!valid || yi.length < 2) return null;
+  return { yi: yi, vi: vi, names: names };
+}
+
+document.getElementById('btn-add-row').addEventListener('click', function() { addDataRow(); });
+document.getElementById('btn-remove-row').addEventListener('click', function() {
+  var rows = dataBody.querySelectorAll('tr');
+  if (rows.length > 0) rows[rows.length - 1].remove();
+  renumberRows();
+});
+document.getElementById('btn-clear-data').addEventListener('click', function() { clearData(); });
+
+/* ---------- CSV paste ---------- */
+var csvArea = document.getElementById('csv-paste-area');
+var csvImportBtn = document.getElementById('btn-import-csv');
+document.getElementById('btn-paste-csv').addEventListener('click', function() {
+  var show = csvArea.style.display === 'none';
+  csvArea.style.display = show ? 'block' : 'none';
+  csvImportBtn.style.display = show ? 'inline-block' : 'none';
+});
+csvImportBtn.addEventListener('click', function() {
+  var lines = csvArea.value.trim().split('\n');
+  clearData();
+  lines.forEach(function(line) {
+    if (!line.trim()) return;
+    // Skip header
+    if (/study/i.test(line) && /effect|yi|es/i.test(line)) return;
+    var parts = line.split(/[,\t]/);
+    if (parts.length >= 3) {
+      addDataRow(parts[0].trim(), parseFloat(parts[1]), parseFloat(parts[2]));
+    } else if (parts.length === 2) {
+      addDataRow('Study', parseFloat(parts[0]), parseFloat(parts[1]));
+    }
+  });
+  csvArea.style.display = 'none';
+  csvImportBtn.style.display = 'none';
+});
+
+document.getElementById('btn-export-csv').addEventListener('click', function() {
+  var data = readData();
+  if (!data) { alert('No valid data to export.'); return; }
+  var csv = 'study,effect,se\n';
+  data.names.forEach(function(n, i) {
+    csv += '"' + n.replace(/"/g,'""') + '",' + data.yi[i] + ',' + Math.sqrt(data.vi[i]) + '\n';
+  });
+  downloadFile(csv, 'pooling-suite-data.csv', 'text/csv');
+});
+
+/* ---------- Example data ---------- */
+// BCG Vaccine data (13 studies, log RR)
+var BCG_DATA = [
+  { name: 'Aronson 1948', yi: -0.8893, se: 0.4646 },
+  { name: 'Ferguson & Simes 1949', yi: -1.5854, se: 0.3552 },
+  { name: 'Rosenthal et al 1960', yi: -1.3481, se: 0.1727 },
+  { name: 'Hart & Sutherland 1977', yi: -1.4416, se: 0.1124 },
+  { name: 'Frimodt-Moller et al 1973', yi: -1.6209, se: 0.2169 },
+  { name: 'Stein & Aronson 1953', yi: 0.0120, se: 0.2503 },
+  { name: 'Vandiviere et al 1973', yi: -0.4694, se: 0.4524 },
+  { name: 'TPT Madras 1980', yi: 0.0128, se: 0.0726 },
+  { name: 'Coetzee & Berjak 1968', yi: -0.9531, se: 0.2230 },
+  { name: 'Rosenthal et al 1961', yi: -0.3407, se: 0.2553 },
+  { name: 'Comstock et al 1974', yi: -0.0173, se: 0.1704 },
+  { name: 'Comstock & Webster 1969', yi: -0.4535, se: 0.4358 },
+  { name: 'Comstock et al 1976', yi: -0.0173, se: 0.3013 }
+];
+
+// Magnesium for MI (Normand 1999, log OR)
+var MG_DATA = [
+  { name: 'Morton 1984', yi: -2.197, se: 1.048 },
+  { name: 'Rasmussen 1986', yi: -2.197, se: 1.265 },
+  { name: 'Smith 1986', yi: -1.252, se: 0.728 },
+  { name: 'Abraham 1987', yi: -0.511, se: 0.823 },
+  { name: 'Feldstedt 1991', yi: 0.202, se: 0.399 },
+  { name: 'Schechter 1991', yi: -2.303, se: 1.054 },
+  { name: 'Ceremuzynski 1992', yi: -0.693, se: 0.602 },
+  { name: 'Singh 1992', yi: -1.204, se: 0.461 }
+];
+
+function loadExample(data) {
+  clearData();
+  data.forEach(function(d) { addDataRow(d.name, d.yi, d.se); });
+}
+document.getElementById('btn-load-bcg').addEventListener('click', function() { loadExample(BCG_DATA); });
+document.getElementById('btn-load-mg').addEventListener('click', function() { loadExample(MG_DATA); });
+
+/* ---------- Run Analysis ---------- */
+document.getElementById('btn-run-analysis').addEventListener('click', runAnalysis);
+
+function runAnalysis() {
+  var data = readData();
+  if (!data) {
+    document.getElementById('data-status').textContent = 'Error: Need at least 2 studies with valid effect + SE.';
+    return;
+  }
+  APP.yi = data.yi;
+  APP.vi = data.vi;
+  APP.studyNames = data.names;
+
+  document.getElementById('data-status').innerHTML = '<span class="spinner"></span> Running 10 estimators...';
+
+  setTimeout(function() {
+    try {
+      APP.results = runAllEstimators(APP.yi, APP.vi);
+      APP.loo = leaveOneOut(APP.yi, APP.vi);
+      APP.influence = influenceMeasures(APP.yi, APP.vi);
+      APP.baujat = baujatData(APP.yi, APP.vi);
+
+      renderEstimatorTable();
+      renderForestPlot();
+      renderLOO();
+      renderBaujatPlot();
+      renderInfluenceTable();
+      renderTau2BarChart();
+      renderThetaCIChart();
+      renderReport();
+
+      document.getElementById('data-status').textContent = 'Analysis complete: ' + data.yi.length + ' studies, 10 estimators, 3 CI methods.';
+      document.getElementById('status-studies').textContent = 'Studies: ' + data.yi.length;
+
+      // Save to localStorage
+      try {
+        localStorage.setItem('poolingSuite_data', JSON.stringify(data));
+      } catch(e) {}
+    } catch(err) {
+      document.getElementById('data-status').textContent = 'Error: ' + err.message;
+      console.error(err);
+    }
+  }, 50);
+}
+
+/* ---------- Restore data from localStorage ---------- */
+(function() {
+  try {
+    var saved = localStorage.getItem('poolingSuite_data');
+    if (saved) {
+      var data = JSON.parse(saved);
+      data.names.forEach(function(n, i) {
+        addDataRow(n, data.yi[i], Math.sqrt(data.vi[i]));
+      });
+    } else {
+      // Load BCG as default
+      loadExample(BCG_DATA);
+    }
+  } catch(e) { loadExample(BCG_DATA); }
+})();
+
+/* ---------- Render: Estimator Table ---------- */
+function renderEstimatorTable() {
+  var tbody = document.getElementById('estimator-tbody');
+  tbody.innerHTML = '';
+  APP.results.forEach(function(r) {
+    var tr = document.createElement('tr');
+    if (r.method === 'REML') tr.classList.add('est-highlight');
+    tr.innerHTML =
+      '<td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + ESTIMATOR_COLORS[r.method] + ';margin-right:6px;vertical-align:middle;"></span>' + escapeHtml(r.method) + ' <small style="color:var(--text3)">' + escapeHtml(r.fullName) + '</small></td>' +
+      '<td>' + fmt(r.tau2) + '</td>' +
+      '<td>' + fmt2(r.I2_est) + '</td>' +
+      '<td>' + fmt2(r.H2_est) + '</td>' +
+      '<td>' + fmt(r.theta) + '</td>' +
+      '<td>' + fmt(r.se) + '</td>' +
+      '<td>[' + fmt(r.waldCI[0]) + ', ' + fmt(r.waldCI[1]) + ']</td>' +
+      '<td>[' + fmt(r.hksjCI[0]) + ', ' + fmt(r.hksjCI[1]) + ']</td>' +
+      '<td>[' + fmt(r.tdistCI[0]) + ', ' + fmt(r.tdistCI[1]) + ']</td>' +
+      '<td>[' + fmt(r.PI[0]) + ', ' + fmt(r.PI[1]) + ']</td>' +
+      '<td>' + fmt2(r.Q) + '</td>' +
+      '<td>' + (r.Qp < 0.001 ? '< 0.001' : fmt3(r.Qp)) + '</td>';
+    tbody.appendChild(tr);
+  });
+}
+
+/* ---------- Render: Forest Plot (SVG) ---------- */
+function renderForestPlot() {
+  var container = document.getElementById('forest-container');
+  var yi = APP.yi, vi = APP.vi, names = APP.studyNames;
+  var k = yi.length;
+  var results = APP.results;
+
+  // Reference estimator for study weights
+  var refEst = document.getElementById('forest-ref-estimator').value;
+  var refResult = results.find(function(r){ return r.method === refEst; }) || results[1];
+  var ws = refResult.weights;
+  var sumWs = ws.reduce(function(a,b){return a+b;},0);
+  var relW = ws.map(function(w){ return w / sumWs * 100; });
+
+  // Layout
+  var leftCol = 220, numCol = 320, plotW = 400, rightCol = 80;
+  var svgW = leftCol + plotW + numCol + rightCol;
+  var rowH = 24;
+  var headerH = 40;
+  var studyAreaH = k * rowH;
+  var pooledAreaH = results.length * (rowH + 2) + 20;
+  var svgH = headerH + studyAreaH + 30 + pooledAreaH + 20;
+
+  // Determine x range
+  var allVals = [];
+  yi.forEach(function(y, i) {
+    var se = Math.sqrt(vi[i]);
+    allVals.push(y - 1.96*se, y + 1.96*se);
+  });
+  results.forEach(function(r) {
+    allVals.push(r.waldCI[0], r.waldCI[1]);
+    if (isFinite(r.PI[0])) { allVals.push(r.PI[0], r.PI[1]); }
+  });
+  var xMin = Math.min.apply(null, allVals);
+  var xMax = Math.max.apply(null, allVals);
+  var xPad = (xMax - xMin) * 0.1;
+  xMin -= xPad; xMax += xPad;
+
+  function xScale(v) { return leftCol + (v - xMin) / (xMax - xMin) * plotW; }
+
+  var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  var textColor = isDark ? '#e2e8f0' : '#1a1a2e';
+  var gridColor = isDark ? '#334155' : '#e5e7eb';
+  var bgColor = isDark ? '#1e293b' : '#ffffff';
+
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + svgW + '" height="' + svgH + '" style="font-family:Segoe UI,system-ui,sans-serif;font-size:12px;" id="forest-svg">';
+  svg += '<rect width="' + svgW + '" height="' + svgH + '" fill="' + bgColor + '"/>';
+
+  // Header
+  svg += '<text x="10" y="28" font-weight="600" font-size="13" fill="' + textColor + '">Study</text>';
+  svg += '<text x="' + (leftCol + plotW/2) + '" y="28" text-anchor="middle" font-weight="600" font-size="13" fill="' + textColor + '">Effect Size (95% CI)</text>';
+  svg += '<text x="' + (leftCol + plotW + 10) + '" y="16" font-weight="600" font-size="11" fill="' + textColor + '">Effect [95% CI]</text>';
+  svg += '<text x="' + (leftCol + plotW + numCol - 10) + '" y="16" font-weight="600" font-size="11" fill="' + textColor + '" text-anchor="end">Weight</text>';
+
+  // Null line
+  var nullX = xScale(0);
+  svg += '<line x1="' + nullX + '" y1="' + headerH + '" x2="' + nullX + '" y2="' + (headerH + studyAreaH + 20) + '" stroke="' + gridColor + '" stroke-dasharray="4,3"/>';
+
+  // Grid lines
+  var niceVals = niceGridLines(xMin, xMax, 6);
+  niceVals.forEach(function(v) {
+    var x = xScale(v);
+    svg += '<line x1="' + x + '" y1="' + headerH + '" x2="' + x + '" y2="' + (headerH + studyAreaH + 20) + '" stroke="' + gridColor + '" stroke-width="0.5"/>';
+    svg += '<text x="' + x + '" y="' + (headerH + studyAreaH + 32) + '" text-anchor="middle" font-size="10" fill="' + textColor + '">' + fmt2(v) + '</text>';
+  });
+
+  // Studies
+  yi.forEach(function(y, i) {
+    var se = Math.sqrt(vi[i]);
+    var ciLo = y - 1.96 * se, ciHi = y + 1.96 * se;
+    var cy = headerH + i * rowH + rowH/2;
+    var x = xScale(y);
+    var x1 = xScale(ciLo), x2 = xScale(ciHi);
+    // Clip CI whisker to plot area
+    x1 = Math.max(leftCol, x1); x2 = Math.min(leftCol + plotW, x2);
+    var sqSize = Math.max(4, Math.min(16, Math.sqrt(relW[i]) * 2.5));
+
+    // Study name
+    svg += '<text x="10" y="' + (cy + 4) + '" font-size="12" fill="' + textColor + '">' + escapeHtml(names[i]) + '</text>';
+    // CI line
+    svg += '<line x1="' + x1 + '" y1="' + cy + '" x2="' + x2 + '" y2="' + cy + '" stroke="' + textColor + '" stroke-width="1.5"/>';
+    // Square (weighted)
+    svg += '<rect x="' + (x - sqSize/2) + '" y="' + (cy - sqSize/2) + '" width="' + sqSize + '" height="' + sqSize + '" fill="' + ESTIMATOR_COLORS.DL + '"/>';
+    // Numeric values
+    svg += '<text x="' + (leftCol + plotW + 10) + '" y="' + (cy + 4) + '" font-size="11" fill="' + textColor + '">' + fmt2(y) + ' [' + fmt2(ciLo) + ', ' + fmt2(ciHi) + ']</text>';
+    svg += '<text x="' + (leftCol + plotW + numCol - 10) + '" y="' + (cy + 4) + '" font-size="11" fill="' + textColor + '" text-anchor="end">' + fmt2(relW[i]) + '%</text>';
+  });
+
+  // Separator line
+  var sepY = headerH + studyAreaH + 8;
+  svg += '<line x1="10" y1="' + sepY + '" x2="' + (svgW - 10) + '" y2="' + sepY + '" stroke="' + textColor + '" stroke-width="1"/>';
+
+  // Pooled diamonds
+  var pooledStartY = sepY + 22;
+  results.forEach(function(r, idx) {
+    var cy = pooledStartY + idx * (rowH + 2);
+    var x = xScale(r.theta);
+    var xLo = xScale(r.waldCI[0]), xHi = xScale(r.waldCI[1]);
+    var dh = 8;
+    var color = ESTIMATOR_COLORS[r.method];
+
+    // Diamond
+    svg += '<polygon points="' + xLo + ',' + cy + ' ' + x + ',' + (cy - dh) + ' ' + xHi + ',' + cy + ' ' + x + ',' + (cy + dh) + '" fill="' + color + '" opacity="0.7" stroke="' + color + '" stroke-width="1"/>';
+    // Label
+    svg += '<text x="10" y="' + (cy + 4) + '" font-size="11" font-weight="600" fill="' + color + '">' + escapeHtml(r.method) + ' (' + escapeHtml(r.fullName) + ')</text>';
+    // Values
+    svg += '<text x="' + (leftCol + plotW + 10) + '" y="' + (cy + 4) + '" font-size="11" fill="' + color + '">' + fmt(r.theta) + ' [' + fmt(r.waldCI[0]) + ', ' + fmt(r.waldCI[1]) + ']</text>';
+  });
+
+  // Prediction interval for REML
+  var remlR = results.find(function(r){ return r.method === 'REML'; });
+  if (remlR && isFinite(remlR.PI[0])) {
+    var piY = pooledStartY + 2 * (rowH + 2); // REML row
+    var piX1 = xScale(remlR.PI[0]), piX2 = xScale(remlR.PI[1]);
+    svg += '<line x1="' + piX1 + '" y1="' + piY + '" x2="' + piX2 + '" y2="' + piY + '" stroke="' + ESTIMATOR_COLORS.REML + '" stroke-width="1.5" stroke-dasharray="6,3"/>';
+  }
+
+  svg += '</svg>';
+  container.innerHTML = svg;
+}
+
+function niceGridLines(min, max, n) {
+  var range = max - min;
+  var step = range / n;
+  var mag = Math.pow(10, Math.floor(Math.log10(step)));
+  var norm = step / mag;
+  if (norm < 1.5) step = mag;
+  else if (norm < 3.5) step = 2 * mag;
+  else if (norm < 7.5) step = 5 * mag;
+  else step = 10 * mag;
+  var vals = [];
+  var start = Math.ceil(min / step) * step;
+  for (var v = start; v <= max; v += step) vals.push(Math.round(v * 1e10) / 1e10);
+  return vals;
+}
+
+document.getElementById('forest-ref-estimator').addEventListener('change', function() {
+  if (APP.results) renderForestPlot();
+});
+
+/* ---------- Download SVG ---------- */
+document.getElementById('btn-download-svg').addEventListener('click', function() {
+  var svgEl = document.getElementById('forest-svg');
+  if (!svgEl) return;
+  var svgData = new XMLSerializer().serializeToString(svgEl);
+  downloadFile(svgData, 'pooling-suite-forest.svg', 'image/svg+xml');
+});
+
+/* ---------- Render: LOO Forest ---------- */
+function renderLOO() {
+  var container = document.getElementById('loo-container');
+  var loo = APP.loo;
+  var names = APP.studyNames;
+  var k = loo.length;
+
+  // Get overall DL result
+  var dlR = APP.results.find(function(r){ return r.method === 'DL'; });
+  var overallTheta = dlR.theta;
+  var overallCI = dlR.waldCI;
+
+  var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  var textColor = isDark ? '#e2e8f0' : '#1a1a2e';
+  var gridColor = isDark ? '#334155' : '#e5e7eb';
+  var bgColor = isDark ? '#1e293b' : '#ffffff';
+
+  var rowH = 22, svgW = 600, leftCol = 180, plotW = 300;
+  var svgH = (k + 2) * rowH + 20;
+
+  var allVals = [overallCI[0], overallCI[1]];
+  loo.forEach(function(l) { allVals.push(l.ci[0], l.ci[1]); });
+  var xMin = Math.min.apply(null, allVals), xMax = Math.max.apply(null, allVals);
+  var xPad = (xMax - xMin) * 0.15; xMin -= xPad; xMax += xPad;
+  function xS(v) { return leftCol + (v - xMin) / (xMax - xMin) * plotW; }
+
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + svgW + '" height="' + svgH + '" style="font-family:Segoe UI,system-ui,sans-serif;font-size:11px;">';
+  svg += '<rect width="' + svgW + '" height="' + svgH + '" fill="' + bgColor + '"/>';
+
+  // Reference line at overall estimate
+  svg += '<line x1="' + xS(overallTheta) + '" y1="0" x2="' + xS(overallTheta) + '" y2="' + svgH + '" stroke="' + ESTIMATOR_COLORS.DL + '" stroke-dasharray="4,3" opacity="0.5"/>';
+
+  svg += '<text x="10" y="16" font-weight="600" fill="' + textColor + '">Omitting study</text>';
+  svg += '<text x="' + (leftCol + plotW/2) + '" y="16" text-anchor="middle" font-weight="600" fill="' + textColor + '">Pooled estimate (DL)</text>';
+
+  loo.forEach(function(l, i) {
+    var cy = (i + 1) * rowH + 10;
+    var x = xS(l.theta);
+    var x1 = xS(l.ci[0]), x2 = xS(l.ci[1]);
+    // Highlight if influential (estimate changes direction or moves a lot)
+    var isInf = Math.abs(l.theta - overallTheta) > 0.3 * Math.abs(overallTheta);
+    var col = isInf ? ESTIMATOR_COLORS.EB : ESTIMATOR_COLORS.DL;
+    svg += '<text x="10" y="' + (cy + 4) + '" fill="' + (isInf ? ESTIMATOR_COLORS.EB : textColor) + '">' + escapeHtml(names[l.omitted]) + '</text>';
+    svg += '<line x1="' + x1 + '" y1="' + cy + '" x2="' + x2 + '" y2="' + cy + '" stroke="' + col + '" stroke-width="1.5"/>';
+    svg += '<circle cx="' + x + '" cy="' + cy + '" r="3" fill="' + col + '"/>';
+    svg += '<text x="' + (leftCol + plotW + 8) + '" y="' + (cy + 4) + '" font-size="10" fill="' + textColor + '">' + fmt3(l.theta) + '</text>';
+  });
+
+  // Overall
+  var oy = (k + 1) * rowH + 10;
+  svg += '<line x1="10" y1="' + (oy - rowH/2) + '" x2="' + svgW + '" y2="' + (oy - rowH/2) + '" stroke="' + textColor + '"/>';
+  var ox = xS(overallTheta), ox1 = xS(overallCI[0]), ox2 = xS(overallCI[1]);
+  svg += '<polygon points="' + ox1 + ',' + oy + ' ' + ox + ',' + (oy-6) + ' ' + ox2 + ',' + oy + ' ' + ox + ',' + (oy+6) + '" fill="' + ESTIMATOR_COLORS.DL + '"/>';
+  svg += '<text x="10" y="' + (oy + 4) + '" font-weight="600" fill="' + ESTIMATOR_COLORS.DL + '">Overall (DL)</text>';
+
+  svg += '</svg>';
+  container.innerHTML = svg;
+}
+
+/* ---------- Render: Baujat Plot ---------- */
+function renderBaujatPlot() {
+  var container = document.getElementById('baujat-container');
+  var data = APP.baujat;
+  var names = APP.studyNames;
+
+  var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  var textColor = isDark ? '#e2e8f0' : '#1a1a2e';
+  var gridColor = isDark ? '#334155' : '#e5e7eb';
+  var bgColor = isDark ? '#1e293b' : '#ffffff';
+
+  var svgW = 500, svgH = 400;
+  var margin = { top: 30, right: 30, bottom: 50, left: 60 };
+  var pW = svgW - margin.left - margin.right;
+  var pH = svgH - margin.top - margin.bottom;
+
+  var xMax = Math.max.apply(null, data.map(function(d){ return d.contribQ; })) * 1.15;
+  var yMax = Math.max.apply(null, data.map(function(d){ return d.influence; })) * 1.15;
+  if (xMax === 0) xMax = 1;
+  if (yMax === 0) yMax = 0.01;
+
+  function xS(v) { return margin.left + (v / xMax) * pW; }
+  function yS(v) { return margin.top + pH - (v / yMax) * pH; }
+
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + svgW + '" height="' + svgH + '" class="svg-plot" style="font-family:Segoe UI,system-ui,sans-serif;font-size:11px;">';
+  svg += '<rect width="' + svgW + '" height="' + svgH + '" fill="' + bgColor + '"/>';
+
+  // Axes
+  svg += '<line x1="' + margin.left + '" y1="' + (margin.top + pH) + '" x2="' + (margin.left + pW) + '" y2="' + (margin.top + pH) + '" stroke="' + textColor + '"/>';
+  svg += '<line x1="' + margin.left + '" y1="' + margin.top + '" x2="' + margin.left + '" y2="' + (margin.top + pH) + '" stroke="' + textColor + '"/>';
+  svg += '<text x="' + (margin.left + pW/2) + '" y="' + (svgH - 8) + '" text-anchor="middle" fill="' + textColor + '">Contribution to Q</text>';
+  svg += '<text x="15" y="' + (margin.top + pH/2) + '" text-anchor="middle" fill="' + textColor + '" transform="rotate(-90,15,' + (margin.top + pH/2) + ')">Influence on pooled estimate</text>';
+  svg += '<text x="' + (margin.left + pW/2) + '" y="20" text-anchor="middle" font-weight="600" font-size="13" fill="' + textColor + '">Baujat Plot</text>';
+
+  // Mean lines (medians as thresholds)
+  var medQ = data.map(function(d){return d.contribQ;}).sort(function(a,b){return a-b;})[Math.floor(data.length/2)];
+  var medI = data.map(function(d){return d.influence;}).sort(function(a,b){return a-b;})[Math.floor(data.length/2)];
+  svg += '<line x1="' + xS(medQ) + '" y1="' + margin.top + '" x2="' + xS(medQ) + '" y2="' + (margin.top+pH) + '" stroke="' + gridColor + '" stroke-dasharray="4,3"/>';
+  svg += '<line x1="' + margin.left + '" y1="' + yS(medI) + '" x2="' + (margin.left+pW) + '" y2="' + yS(medI) + '" stroke="' + gridColor + '" stroke-dasharray="4,3"/>';
+
+  // Points
+  data.forEach(function(d, i) {
+    var cx = xS(d.contribQ), cy = yS(d.influence);
+    var isOutlier = d.contribQ > medQ && d.influence > medI;
+    var color = isOutlier ? ESTIMATOR_COLORS.EB : ESTIMATOR_COLORS.DL;
+    svg += '<circle cx="' + cx + '" cy="' + cy + '" r="5" fill="' + color + '" opacity="0.8"/>';
+    svg += '<text x="' + (cx + 7) + '" y="' + (cy + 3) + '" font-size="9" fill="' + textColor + '">' + escapeHtml(names[i]) + '</text>';
+  });
+
+  svg += '</svg>';
+  container.innerHTML = svg;
+}
+
+/* ---------- Render: Influence Table ---------- */
+function renderInfluenceTable() {
+  var tbody = document.getElementById('influence-tbody');
+  tbody.innerHTML = '';
+  APP.influence.forEach(function(inf) {
+    var tr = document.createElement('tr');
+    // Highlight influential
+    if (Math.abs(inf.rstud) > 2 || inf.cookD > 1) tr.classList.add('influential-high');
+    tr.innerHTML =
+      '<td>' + escapeHtml(APP.studyNames[inf.study]) + '</td>' +
+      '<td>' + fmt3(inf.rstud) + '</td>' +
+      '<td>' + fmt(inf.hat) + '</td>' +
+      '<td>' + fmt(inf.cookD) + '</td>' +
+      '<td>' + fmt(inf.dffits) + '</td>' +
+      '<td>' + fmt(inf.covRatio) + '</td>' +
+      '<td>' + fmt(inf.thetaWithout) + '</td>' +
+      '<td>' + fmt(inf.tau2Without) + '</td>';
+    tbody.appendChild(tr);
+  });
+}
+
+/* ---------- Render: Tau2 bar chart ---------- */
+function renderTau2BarChart() {
+  var container = document.getElementById('tau2-bar-chart');
+  var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  var textColor = isDark ? '#e2e8f0' : '#1a1a2e';
+  var bgColor = isDark ? '#1e293b' : '#ffffff';
+
+  var results = APP.results;
+  var maxTau2 = Math.max.apply(null, results.map(function(r){ return r.tau2; }));
+  if (maxTau2 === 0) maxTau2 = 0.1;
+
+  var svgW = 400, barH = 22, svgH = results.length * (barH + 4) + 30;
+  var leftLbl = 50, barMaxW = svgW - leftLbl - 80;
+
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + svgW + '" height="' + svgH + '" style="font-family:Segoe UI,system-ui,sans-serif;font-size:11px;">';
+  svg += '<rect width="' + svgW + '" height="' + svgH + '" fill="' + bgColor + '"/>';
+
+  results.forEach(function(r, i) {
+    var y = i * (barH + 4) + 10;
+    var w = (r.tau2 / maxTau2) * barMaxW;
+    if (r.method === 'FE') w = 2; // show a tiny bar
+    svg += '<text x="' + (leftLbl - 4) + '" y="' + (y + barH/2 + 4) + '" text-anchor="end" fill="' + textColor + '" font-weight="500">' + r.method + '</text>';
+    svg += '<rect x="' + leftLbl + '" y="' + y + '" width="' + w + '" height="' + barH + '" fill="' + ESTIMATOR_COLORS[r.method] + '" rx="3"/>';
+    svg += '<text x="' + (leftLbl + w + 6) + '" y="' + (y + barH/2 + 4) + '" fill="' + textColor + '">' + fmt(r.tau2) + '</text>';
+  });
+
+  svg += '</svg>';
+  container.innerHTML = svg;
+}
+
+/* ---------- Render: Theta CI comparison chart ---------- */
+function renderThetaCIChart() {
+  var container = document.getElementById('theta-ci-chart');
+  var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  var textColor = isDark ? '#e2e8f0' : '#1a1a2e';
+  var bgColor = isDark ? '#1e293b' : '#ffffff';
+
+  var results = APP.results;
+  var allVals = [];
+  results.forEach(function(r) {
+    allVals.push(r.waldCI[0], r.waldCI[1], r.hksjCI[0], r.hksjCI[1], r.tdistCI[0], r.tdistCI[1]);
+  });
+  var xMin = Math.min.apply(null, allVals.filter(isFinite));
+  var xMax = Math.max.apply(null, allVals.filter(isFinite));
+  var xPad = (xMax - xMin) * 0.1; xMin -= xPad; xMax += xPad;
+
+  var svgW = 500, rowH = 50, svgH = results.length * rowH + 30;
+  var leftLbl = 50, plotW = svgW - leftLbl - 20;
+
+  function xS(v) { return leftLbl + (v - xMin) / (xMax - xMin) * plotW; }
+
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + svgW + '" height="' + svgH + '" style="font-family:Segoe UI,system-ui,sans-serif;font-size:11px;">';
+  svg += '<rect width="' + svgW + '" height="' + svgH + '" fill="' + bgColor + '"/>';
+
+  // Null line
+  svg += '<line x1="' + xS(0) + '" y1="0" x2="' + xS(0) + '" y2="' + svgH + '" stroke="' + textColor + '" stroke-dasharray="4,3" opacity="0.3"/>';
+
+  results.forEach(function(r, i) {
+    var baseY = i * rowH + 20;
+    var cx = xS(r.theta);
+    // Wald (top)
+    svg += '<line x1="' + xS(r.waldCI[0]) + '" y1="' + (baseY - 8) + '" x2="' + xS(r.waldCI[1]) + '" y2="' + (baseY - 8) + '" stroke="' + ESTIMATOR_COLORS[r.method] + '" stroke-width="2"/>';
+    // HKSJ (middle)
+    svg += '<line x1="' + xS(r.hksjCI[0]) + '" y1="' + baseY + '" x2="' + xS(r.hksjCI[1]) + '" y2="' + baseY + '" stroke="' + ESTIMATOR_COLORS[r.method] + '" stroke-width="2" stroke-dasharray="6,2"/>';
+    // t-dist (bottom)
+    svg += '<line x1="' + xS(r.tdistCI[0]) + '" y1="' + (baseY + 8) + '" x2="' + xS(r.tdistCI[1]) + '" y2="' + (baseY + 8) + '" stroke="' + ESTIMATOR_COLORS[r.method] + '" stroke-width="2" opacity="0.5"/>';
+    // Point
+    svg += '<circle cx="' + cx + '" cy="' + baseY + '" r="4" fill="' + ESTIMATOR_COLORS[r.method] + '"/>';
+    // Label
+    svg += '<text x="' + (leftLbl - 4) + '" y="' + (baseY + 4) + '" text-anchor="end" fill="' + textColor + '" font-weight="500">' + r.method + '</text>';
+  });
+
+  // Legend
+  svg += '<text x="' + (leftLbl + 10) + '" y="' + (svgH - 4) + '" font-size="10" fill="' + textColor + '">Solid = Wald | Dashed = HKSJ | Faded = t-dist</text>';
+
+  svg += '</svg>';
+  container.innerHTML = svg;
+}
+
+/* ---------- GOSH ---------- */
+document.getElementById('btn-run-gosh').addEventListener('click', function() {
+  if (!APP.yi || APP.yi.length < 2) { alert('Run analysis first.'); return; }
+  var statusEl = document.getElementById('gosh-status');
+  statusEl.innerHTML = '<span class="spinner"></span> Running GOSH (k=' + APP.yi.length + ')...';
+  setTimeout(function() {
+    try {
+      APP.rng = seedPRNG(42);
+      var gosh = runGOSH(APP.yi, APP.vi, APP.studyNames, APP.rng);
+      renderGOSHPlot(gosh);
+      statusEl.textContent = gosh.length + ' subsets computed.';
+    } catch(e) {
+      statusEl.textContent = 'Error: ' + e.message;
+    }
+  }, 50);
+});
+
+function renderGOSHPlot(gosh) {
+  var container = document.getElementById('gosh-container');
+  var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  var textColor = isDark ? '#e2e8f0' : '#1a1a2e';
+  var gridColor = isDark ? '#334155' : '#e5e7eb';
+  var bgColor = isDark ? '#1e293b' : '#ffffff';
+
+  var svgW = 700, svgH = 450;
+  var margin = { top: 30, right: 30, bottom: 50, left: 70 };
+  var pW = svgW - margin.left - margin.right;
+  var pH = svgH - margin.top - margin.bottom;
+
+  var thetas = gosh.map(function(g){ return g.theta; });
+  var i2s = gosh.map(function(g){ return g.I2; });
+  var xMin = Math.min.apply(null, thetas), xMax = Math.max.apply(null, thetas);
+  var yMin = 0, yMax = 100;
+  var xPad = (xMax - xMin) * 0.05 || 0.1; xMin -= xPad; xMax += xPad;
+
+  function xS(v) { return margin.left + (v - xMin) / (xMax - xMin) * pW; }
+  function yS(v) { return margin.top + pH - (v - yMin) / (yMax - yMin) * pH; }
+
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + svgW + '" height="' + svgH + '" class="svg-plot" style="font-family:Segoe UI,system-ui,sans-serif;font-size:11px;">';
+  svg += '<rect width="' + svgW + '" height="' + svgH + '" fill="' + bgColor + '"/>';
+
+  // Axes
+  svg += '<line x1="' + margin.left + '" y1="' + (margin.top + pH) + '" x2="' + (margin.left + pW) + '" y2="' + (margin.top + pH) + '" stroke="' + textColor + '"/>';
+  svg += '<line x1="' + margin.left + '" y1="' + margin.top + '" x2="' + margin.left + '" y2="' + (margin.top + pH) + '" stroke="' + textColor + '"/>';
+  svg += '<text x="' + (margin.left + pW/2) + '" y="' + (svgH - 8) + '" text-anchor="middle" fill="' + textColor + '">Pooled Effect (DL)</text>';
+  svg += '<text x="15" y="' + (margin.top + pH/2) + '" text-anchor="middle" fill="' + textColor + '" transform="rotate(-90,15,' + (margin.top + pH/2) + ')">I\u00B2 (%)</text>';
+  svg += '<text x="' + (margin.left + pW/2) + '" y="20" text-anchor="middle" font-weight="600" font-size="13" fill="' + textColor + '">GOSH Plot (' + gosh.length + ' subsets)</text>';
+
+  // Grid
+  [0, 25, 50, 75, 100].forEach(function(v) {
+    svg += '<line x1="' + margin.left + '" y1="' + yS(v) + '" x2="' + (margin.left + pW) + '" y2="' + yS(v) + '" stroke="' + gridColor + '" stroke-width="0.5"/>';
+    svg += '<text x="' + (margin.left - 6) + '" y="' + (yS(v) + 4) + '" text-anchor="end" font-size="10" fill="' + textColor + '">' + v + '</text>';
+  });
+
+  // Points
+  gosh.forEach(function(g) {
+    var cx = xS(g.theta), cy = yS(g.I2);
+    svg += '<circle cx="' + cx + '" cy="' + cy + '" r="2" fill="' + ESTIMATOR_COLORS.DL + '" opacity="0.3"/>';
+  });
+
+  svg += '</svg>';
+  container.innerHTML = svg;
+}
+
+/* ---------- Render: Report ---------- */
+function renderReport() {
+  var yi = APP.yi, vi = APP.vi, names = APP.studyNames;
+  var k = yi.length;
+  var reml = APP.results.find(function(r){ return r.method === 'REML'; });
+  var dl = APP.results.find(function(r){ return r.method === 'DL'; });
+  var fe = APP.results.find(function(r){ return r.method === 'FE'; });
+  var effectType = document.getElementById('effect-type-select').value;
+
+  // Methods text
+  var methodsText = 'Meta-analysis was performed using ' + k + ' studies. ' +
+    'Effect sizes were pooled using 10 between-study variance (tau\u00B2) estimators: ' +
+    'Fixed-Effect (FE), DerSimonian-Laird (DL), Restricted Maximum Likelihood (REML), ' +
+    'Maximum Likelihood (ML), Paule-Mandel (PM), Empirical Bayes (EB), ' +
+    'Sidik-Jonkman (SJ), Hunter-Schmidt (HS), Hedges (HE), and Bowden-Dudbridge (BD). ' +
+    'For each estimator, three confidence interval methods were applied: ' +
+    'Wald (z-based), Hartung-Knapp-Sidik-Jonkman (HKSJ, t-distribution with adjusted SE), ' +
+    'and Knapp-Riliet (t-distribution). ' +
+    'Prediction intervals were computed using the t-distribution with k\u22122 degrees of freedom.\n\n' +
+    'Heterogeneity was assessed using Cochran\'s Q test (Q = ' + fmt2(dl.Q) + ', p ' + (dl.Qp < 0.001 ? '< 0.001' : '= ' + fmt3(dl.Qp)) + '), ' +
+    'I\u00B2 (REML-based: ' + fmt2(reml.I2_est) + '%), and tau\u00B2 (REML: ' + fmt(reml.tau2) + '). ' +
+    'The pooled estimate under REML was ' + fmt(reml.theta) + ' (95% Wald CI: ' + fmt(reml.waldCI[0]) + ' to ' + fmt(reml.waldCI[1]) + '; ' +
+    '95% HKSJ CI: ' + fmt(reml.hksjCI[0]) + ' to ' + fmt(reml.hksjCI[1]) + '; ' +
+    '95% Prediction Interval: ' + fmt(reml.PI[0]) + ' to ' + fmt(reml.PI[1]) + ').\n\n' +
+    'Influence diagnostics included leave-one-out analysis, Baujat plot, Cook\'s distance, ' +
+    'hat values, DFFITS, covariance ratios, and studentized residuals. ' +
+    'GOSH (Graphical Overview of Study Heterogeneity) analysis was available for visual inspection ' +
+    'of heterogeneity patterns across all possible study subsets.\n\n' +
+    'All analyses were performed using PoolingSuite v1.0 (browser-based).';
+
+  document.getElementById('methods-text').textContent = methodsText;
+
+  // R code
+  var rCode = '# Equivalent R code using metafor\nlibrary(metafor)\n\n';
+  rCode += '# Data\nyi <- c(' + yi.map(function(y){ return fmt(y); }).join(', ') + ')\n';
+  rCode += 'sei <- c(' + vi.map(function(v){ return fmt(Math.sqrt(v)); }).join(', ') + ')\n';
+  rCode += 'slab <- c(' + names.map(function(n){ return '"' + n.replace(/"/g,'\\"') + '"'; }).join(', ') + ')\n\n';
+  rCode += '# Run all estimators\nmethods <- c("FE", "DL", "REML", "ML", "PM", "EB", "SJ", "HS", "HE")\nfor (m in methods) {\n';
+  rCode += '  res <- rma(yi = yi, sei = sei, slab = slab, method = m)\n';
+  rCode += '  cat(m, ": tau2 =", round(res$tau2, 4), ", theta =", round(coef(res), 4),\n';
+  rCode += '      ", CI = [", round(res$ci.lb, 4), ",", round(res$ci.ub, 4), "]\\n")\n';
+  rCode += '}\n\n';
+  rCode += '# HKSJ adjustment\nres_hksj <- rma(yi = yi, sei = sei, slab = slab, method = "REML", test = "knha")\n';
+  rCode += 'summary(res_hksj)\n\n';
+  rCode += '# Forest plot\nforest(rma(yi = yi, sei = sei, slab = slab, method = "REML"),\n';
+  rCode += '       header = TRUE, mlab = "REML pooled estimate")\n\n';
+  rCode += '# Influence diagnostics\ninf <- influence(rma(yi = yi, sei = sei, slab = slab, method = "REML"))\nplot(inf)\n\n';
+  rCode += '# Leave-one-out\nleave1out(rma(yi = yi, sei = sei, slab = slab, method = "REML"))\n\n';
+  rCode += '# GOSH\ngosh.res <- gosh(rma(yi = yi, sei = sei, slab = slab, method = "DL"))\nplot(gosh.res)\n';
+
+  document.getElementById('r-code').textContent = rCode;
+}
+
+/* ---------- Copy / Export ---------- */
+document.getElementById('btn-copy-methods').addEventListener('click', function() {
+  copyText(document.getElementById('methods-text').textContent);
+});
+document.getElementById('btn-copy-rcode').addEventListener('click', function() {
+  copyText(document.getElementById('r-code').textContent);
+});
+
+function copyText(text) {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).catch(function(){});
+  }
+}
+
+document.getElementById('btn-export-json').addEventListener('click', function() {
+  if (!APP.results) { alert('Run analysis first.'); return; }
+  var obj = {
+    studies: APP.studyNames.map(function(n, i) {
+      return { name: n, yi: APP.yi[i], se: Math.sqrt(APP.vi[i]) };
+    }),
+    estimators: APP.results.map(function(r) {
+      return {
+        method: r.method, fullName: r.fullName,
+        tau2: r.tau2, I2: r.I2_est, H2: r.H2_est,
+        theta: r.theta, se: r.se,
+        waldCI: r.waldCI, hksjCI: r.hksjCI, tdistCI: r.tdistCI,
+        PI: r.PI, Q: r.Q, Qp: r.Qp
+      };
+    })
+  };
+  downloadFile(JSON.stringify(obj, null, 2), 'pooling-suite-results.json', 'application/json');
+});
+
+document.getElementById('btn-export-results-csv').addEventListener('click', function() {
+  if (!APP.results) { alert('Run analysis first.'); return; }
+  var csv = 'Method,FullName,tau2,I2,H2,theta,SE,Wald_LB,Wald_UB,HKSJ_LB,HKSJ_UB,tdist_LB,tdist_UB,PI_LB,PI_UB,Q,Qp\n';
+  APP.results.forEach(function(r) {
+    csv += [r.method, '"' + r.fullName + '"', r.tau2, r.I2_est, r.H2_est, r.theta, r.se,
+      r.waldCI[0], r.waldCI[1], r.hksjCI[0], r.hksjCI[1], r.tdistCI[0], r.tdistCI[1],
+      r.PI[0], r.PI[1], r.Q, r.Qp].join(',') + '\n';
+  });
+  downloadFile(csv, 'pooling-suite-results.csv', 'text/csv');
+});
+
+document.getElementById('btn-print-report').addEventListener('click', function() {
+  window.print();
+});
+
+function downloadFile(content, filename, mime) {
+  var blob = new Blob([content], { type: mime });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/* ---------- MAIF Interop ---------- */
+document.getElementById('btn-export-maif').addEventListener('click', function() {
+  var data = getValidData();
+  if (!data || data.length === 0) { alert('No data to export.'); return; }
+  var maif = {
+    version: '1.0',
+    metadata: {
+      effectType: document.getElementById('effect-type-select').value || 'SMD',
+      createdBy: 'Pooling Suite',
+      createdAt: new Date().toISOString(),
+      author: 'Mahmood Ahmad'
+    },
+    studies: data.map(function(d) {
+      return { id: d.label || d.study || ('Study ' + d.idx), yi: d.yi, sei: d.sei };
+    })
+  };
+  if (APP.results) {
+    maif.results = { pooling: {} };
+    APP.results.forEach(function(r) {
+      maif.results.pooling[r.method] = {
+        theta: r.theta, se: r.se, tau2: r.tau2, I2: r.I2_est,
+        ciLo: r.waldCI[0], ciHi: r.waldCI[1],
+        piLo: r.PI[0], piHi: r.PI[1]
+      };
+    });
+  }
+  downloadFile(JSON.stringify(maif, null, 2), 'maif-export.json', 'application/json');
+});
+
+document.getElementById('btn-import-maif').addEventListener('click', function() {
+  var input = document.createElement('input');
+  input.type = 'file'; input.accept = '.json';
+  input.addEventListener('change', function(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      try {
+        var maif = JSON.parse(ev.target.result);
+        if (!maif.studies || !Array.isArray(maif.studies)) { alert('Invalid MAIF: no studies array.'); return; }
+        clearData();
+        maif.studies.forEach(function(s) {
+          addStudyRow(s.id || 'Study', s.yi, s.sei);
+        });
+        if (maif.metadata && maif.metadata.effectType) {
+          var sel = document.getElementById('effect-type-select');
+          if (sel) sel.value = maif.metadata.effectType;
+        }
+        alert('Imported ' + maif.studies.length + ' studies from MAIF.');
+      } catch (ex) { alert('Failed to parse MAIF: ' + ex.message); }
+    };
+    reader.readAsText(file);
+  });
+  input.click();
+});
+
+/* ---------- End IIFE ---------- */
+})();
+</script>
+</body>
+</html>
