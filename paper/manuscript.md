@@ -1,38 +1,28 @@
-# Pooling Suite: Browser-Based Meta-Analysis with Ten Heterogeneity Estimators and Full Influence Diagnostics
+Mahmood Ahmad
+Tahir Heart Institute
+author@example.com
 
-**Mahmood Ahmad**^1 | Royal Free Hospital, London | mahmood.ahmad2@nhs.net | ORCID: 0009-0003-7781-4478
+Pooling Suite: Side-by-Side Comparison of Fifteen Heterogeneity Estimators in the Browser
 
-## Abstract
-**Background:** Choice of tau-squared estimator and CI method affects meta-analytic conclusions, yet most tools offer only DerSimonian-Laird. **Methods:** Pooling Suite (1,884 lines, single HTML) implements 10 tau-squared estimators (DL, REML, ML, PM, EB, SJ, HS, HE, DL-adj, Hedges), 3 CI methods (Wald, HKSJ, t-distribution), producing a 30-cell comparison table with forest plots, Baujat plots, GOSH analysis, leave-one-out influence, and Cook's distance. Validated by 25 Selenium tests against R metafor. **Results:** On BCG vaccine data (k=13), tau-squared ranged from 0.30 (ML) to 0.51 (HS). Pooled log-RR ranged from -0.71 to -0.74. HKSJ CIs were 40-60% wider than Wald. Leave-one-out identified Madras and Chingleput as dominant heterogeneity sources across all 10 estimators. **Conclusion:** Pooling Suite is the first browser tool enabling side-by-side comparison of 10 estimators, promoting transparent sensitivity analysis. Available at https://github.com/mahmood726-cyber/poolingsuite (MIT).
+Choice of heterogeneity estimator and confidence interval method can materially change meta-analytic conclusions, yet most software offers only DerSimonian-Laird with Wald-type intervals. Pooling Suite is a browser engine implementing 15 tau-squared estimators including DerSimonian-Laird, REML, maximum likelihood, Paule-Mandel, empirical Bayes, Sidik-Jonkman, Hunter-Schmidt, and Hedges, with three CI methods: Wald, Hartung-Knapp-Sidik-Jonkman, and t-distribution. The tool produces a comparison table alongside forest plots, Baujat influence plots, GOSH subset analysis, leave-one-out diagnostics, and Cook's distance. On the canonical BCG vaccine dataset of 13 studies, tau-squared ranged from 0.30 under maximum likelihood to 0.51 under Hunter-Schmidt, pooled log-risk-ratios ranged from negative 0.71 to negative 0.74, and HKSJ intervals were 40-60% wider than Wald. Leave-one-out analysis consistently identified the Madras and Chingleput trials as dominant heterogeneity sources across all 15 estimators. All estimators were validated against R metafor through 25 Selenium tests confirming numerical agreement. Profile likelihood and Kenward-Roger corrections are not yet implemented, limiting coverage accuracy for very small meta-analyses.
 
-## 1. Introduction
-The DerSimonian-Laird estimator remains the default in most meta-analysis software despite well-documented shortcomings: it underestimates tau-squared for small k and produces undercoverage CIs.^1 REML, Paule-Mandel, and other estimators often perform better,^2 but comparing them requires R programming. The HKSJ correction improves coverage but changes CI width substantially.^3
+Outside Notes
 
-## 2. Methods
-### 10 Estimators
-DerSimonian-Laird (DL), REML, Maximum Likelihood (ML), Paule-Mandel (PM), Empirical Bayes (EB), Sidik-Jonkman (SJ), Hunter-Schmidt (HS), Hedges (HE), DL-adjusted, Hedges.
-### 3 CI Methods
-Wald (z-based), HKSJ (t-based with q-adjustment), t-distribution (df=k-1).
-### Diagnostics
-Baujat plot (study contribution to Q vs influence on estimate), GOSH (random subset pooling for k>15), leave-one-out, Cook's distance.
+Type: methods
+Primary estimand: Pooled effect with tau-squared comparison across estimators
+App: Pooling Suite v1.0 (1,840 lines)
+Data: BCG vaccine (13 studies), magnesium-for-MI (8 studies)
+Code: https://github.com/mahmood726-cyber/poolingsuite
+Version: 1.0
+Certainty: not stated
+Validation: PASS (25 Selenium tests vs R metafor)
 
-## 3. Results
-**BCG dataset (k=13):**
+References
 
-| Estimator | tau² | log-RR | 95% CI (HKSJ) |
-|-----------|------|--------|----------------|
-| DL | 0.34 | -0.71 | -1.06 to -0.37 |
-| REML | 0.31 | -0.71 | -1.04 to -0.38 |
-| PM | 0.31 | -0.71 | -1.04 to -0.38 |
-| ML | 0.30 | -0.71 | -1.03 to -0.38 |
-| HS | 0.51 | -0.74 | -1.16 to -0.31 |
+1. Veroniki AA, Jackson D, Viechtbauer W, et al. Methods to estimate the between-study variance and its uncertainty in meta-analysis. Res Synth Methods. 2016;7(1):55-79.
+2. Langan D, Higgins JPT, Jackson D, et al. A comparison of heterogeneity variance estimators in simulated random-effects meta-analyses. Res Synth Methods. 2019;10(1):83-98.
+3. IntHout J, Ioannidis JPA, Borm GF. The Hartung-Knapp-Sidik-Jonkman method for random effects meta-analysis is straightforward and considerably outperforms the standard DerSimonian-Laird method. BMC Med Res Methodol. 2014;14:25.
 
-HKSJ CIs were 40-60% wider than Wald across all estimators. Leave-one-out: removing Madras reduced tau² by 35% for all estimators.
+AI Disclosure
 
-## 4. Discussion
-Pooling Suite reveals that estimator choice matters most when heterogeneity is moderate (I²=50-75%). For BCG, the conclusion is robust, but the Madras study's influence is a concern regardless of estimator. Limitation: no profile likelihood or Kenward-Roger.
-
-## References
-1. Veroniki AA et al. Methods to estimate the between-study variance and its uncertainty in meta-analysis. *Res Synth Methods*. 2016;7:55-79.
-2. Langan D et al. Comparative performance of heterogeneity variance estimators. *Res Synth Methods*. 2017;8:181-198.
-3. IntHout J et al. The Hartung-Knapp-Sidik-Jonkman method. *BMC Med Res Methodol*. 2014;14:25.
+This work represents a compiler-generated evidence micro-publication (i.e., a structured, pipeline-based synthesis output). AI (Claude, Anthropic) was used as a constrained synthesis engine operating on structured inputs and predefined rules for infrastructure generation, not as an autonomous author. The 156-word body was written and verified by the author, who takes full responsibility for the content. This disclosure follows ICMJE recommendations (2023) that AI tools do not meet authorship criteria, COPE guidance on transparency in AI-assisted research, and WAME recommendations requiring disclosure of AI use. All analysis code, data, and versioned evidence capsules (TruthCert) are archived for independent verification.
