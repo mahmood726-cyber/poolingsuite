@@ -451,86 +451,30 @@ ESTIMATORS.DL = function(yi, vi) {
 };
 
 // 3. REML (Restricted Maximum Likelihood)
+// Fisher scoring on restricted profile log-likelihood.
+// Score: s = 0.5 * (sum(w^2*r^2) - trP) where trP = sum(w) - sum(w^2)/sum(w), r_i = yi - theta
+// Expected info: I = 0.5 * tr(P^2) = 0.5 * [sum(w^2) - 2*sum(w^3)/sum(w) + sum(w^2)^2/sum(w)^2]
 ESTIMATORS.REML = function(yi, vi) {
   var k = yi.length;
   var dlResult = ESTIMATORS.DL(yi, vi);
   var tau2 = dlResult.tau2;
   for (var iter = 0; iter < 100; iter++) {
     var ws = vi.map(function(v){ return 1/(v + tau2); });
-    var sumWs = ws.reduce(function(a,b){ return a+b; }, 0);
-    var theta = ws.reduce(function(a,b,i){ return a + b*yi[i]; }, 0) / sumWs;
-    var ws2 = ws.map(function(w){ return w*w; });
-    var sumWs2 = ws2.reduce(function(a,b){ return a+b; }, 0);
-    // gradient of restricted log-likelihood
-    var Qs = ws.reduce(function(a,b,i){ return a + b * Math.pow(yi[i] - theta, 2); }, 0);
-    var dRL = -0.5 * sumWs2 / sumWs + 0.5 * ws2.reduce(function(a,w2,i){ return a + w2 * Math.pow(yi[i] - theta, 2); }, 0);
-    // Actually REML gradient: -0.5 * (sum(w_i^2) - sum(w_i^2)^2/sum(w_i)) ... let me use proper formula
-    // d/dtau2 of REML log-likelihood:
-    // = -0.5 * sum(1/(vi+tau2)^2) + 0.5 * sum(w_i^2 * (yi - theta)^2)  ... but need adjustment for theta
-    // Proper Fisher scoring:
-    // gradient: 0.5 * (sum(w^2*(y-theta)^2) - (k-1) * sumWs2/sumWs... no.
-    // Standard REML NR: tau2_new = tau2 + (Qs - (k-1)) / sum(ws^2)... actually:
-    // Let me use the iterative REML properly:
-    // The restricted log-likelihood:
-    // l_R = -0.5 * [sum(log(vi+tau2)) + log(sumWs) + Qs]
-    // where Qs = sum(ws*(yi-theta)^2)
-    // dl/dtau2 = -0.5 * [-sumWs2/sumWs + sum(ws^2*(yi-theta)^2)]... no
-    // Actually: dl/dtau2 = 0.5*(sum(ws^2*(yi-theta)^2) - sum(ws) + sumWs2/sumWs)...
-    // Simplest correct REML iteration (Fisher scoring):
-    var info = 0.5 * (sumWs2 - ws2.reduce(function(a,b){ return a + b*b; }, 0) / sumWs2);
-    // Let's use the standard approach:
-    // tau2_new = tau2 + [sum(w^2 * r^2) - (k-1)] / sum(w^2)  where r_i = yi - theta
-    // This is actually PM-like. Let me do proper NR for REML:
+    var sumW = ws.reduce(function(a,b){ return a+b; }, 0);
+    var theta = ws.reduce(function(a,b,i){ return a + b*yi[i]; }, 0) / sumW;
+    var sumW2 = ws.reduce(function(a,w){ return a + w*w; }, 0);
     var sumW3 = ws.reduce(function(a,w){ return a + w*w*w; }, 0);
-    // REML gradient
-    var grad = -0.5 * (sumWs2 - sumWs2*sumWs2/sumWs/sumWs) + 0.5 * ws.reduce(function(a,w,i){ var r = yi[i] - theta; return a + w*w*r*r; }, 0) - 0.5 * (sumWs - sumWs2/sumWs);
-    // Simpler: use the fact that for REML:
-    // The update is: tau2 + (Qs/(k-1) - 1) * (k-1)/sum(ws^2)
-    // But let me just do standard Fisher scoring for REML:
-    // Expected information = 0.5 * (sum(ws^2) - sum(ws^2)^2 / sum(ws)^2 * sum(ws))
-    // This gets complicated. Use the well-known iterative formula:
-    // tau2_new = (1/sum(ws^2)) * (sum(ws^2 * ((yi-theta)^2 - vi)) + sum(ws^2*vi*tau2)/(something))
-    //
-    // SIMPLEST CORRECT: Paule-Mandel style iteration converges to REML:
-    // Actually, let me use the direct NR on the profiled restricted log-likelihood.
-    // l_R(tau2) = -0.5 * [sum(log(vi+tau2)) + log(sum(1/(vi+tau2))) + sum(ws*(yi-theta)^2)]
-    // But sum(ws*(yi-theta)^2) = Qs, and for the weighted mean, Qs = sum(ws*yi^2) - theta^2*sumWs
-    // dl/dtau2 = -0.5 * [-sum(ws^2) + (sum(ws^2))^2/sum(ws) ... no
-    //
-    // OK let me just implement it cleanly:
-    var dldt = -0.5 * sumWs + 0.5 * sumWs2 / sumWs + 0.5 * Qs;
-    // Wait, this isn't right either. Let me think step by step.
-    // l_R = -0.5 * sum(log(vi+tau2)) - 0.5 * log(sumWs) - 0.5 * Qs
-    // where ws_i = 1/(vi+tau2), sumWs = sum(ws_i), theta = sum(ws*y)/sumWs, Qs = sum(ws*(y-theta)^2)
-    //
-    // d(sum(log(vi+tau2)))/dtau2 = sum(1/(vi+tau2)) = sumWs
-    // d(log(sumWs))/dtau2 = -sumWs2/sumWs
-    // d(Qs)/dtau2 is complex because theta also depends on tau2
-    //
-    // For Fisher scoring, expected info = 0.5*(sumWs2 - sumWs2^2/(sumWs^2)):
-    // No wait. The standard REML Fisher scoring step is:
-    //
-    // tau2_{n+1} = tau2_n + [Q* - (k-1)] / sum(w*_i^2)
-    // where Q* and w* evaluated at tau2_n. This actually converges to PM.
-    //
-    // For REML specifically, use:
-    // tau2_{n+1} = tau2_n + [sum(w^2*((yi-theta)^2 - vi)) / sum(w^2) + tau2_n * (1 - sumWs2*... )]
-    //
-    // REML Fisher scoring: uses restricted log-likelihood gradient
-    // dl_R/dtau2 = -0.5 * (sum(w_i^2) / sum(w_i) - sum(w_i^2 * (yi-theta)^2))
-    //            = -0.5 * (tr(P) - Q*)  where P accounts for estimating theta
-    // Fisher info: 0.5 * (sum(w_i^2) - sum(w_i^2)^2/sum(w_i)^... )
-    // Simpler: use the Paule-Mandel-style REML iteration:
-    //   tau2_new = tau2 + (sum(w*(yi-theta)^2) - (k-1)) / (sum(w^2) - sum(w^2)/sum(w))
-    var Q_star = 0;
+    // sum(w^2 * r^2) — note: w^2, NOT w like Cochran's Q
+    var sumW2r2 = 0;
     for (var i = 0; i < k; i++) {
-      Q_star += ws[i] * Math.pow(yi[i] - theta, 2);
+      sumW2r2 += ws[i] * ws[i] * Math.pow(yi[i] - theta, 2);
     }
-    // REML: the correction vs ML is subtracting the hat-value trace
-    var trP = sumWs2 / sumWs; // trace of the projection matrix
-    var denom = sumWs2 - trP; // = sum(w^2) - sum(w^2)/sum(w)
-    var tau2_new = Math.max(0, tau2 + (Q_star - (k - 1)) / denom);
-
+    // REML score: 0.5 * (-sum(w) + sum(w^2)/sum(w) + sum(w^2*r^2))
+    var score = 0.5 * (-sumW + sumW2 / sumW + sumW2r2);
+    // Expected information: 0.5 * tr(P^2)
+    var info = 0.5 * (sumW2 - 2 * sumW3 / sumW + sumW2 * sumW2 / (sumW * sumW));
+    if (info < 1e-15) break;
+    var tau2_new = Math.max(0, tau2 + score / info);
     if (Math.abs(tau2_new - tau2) < 1e-10) { tau2 = tau2_new; break; }
     tau2 = tau2_new;
   }
@@ -624,80 +568,35 @@ ESTIMATORS.EB = function(yi, vi) {
   return { tau2: tau2, method: 'EB', fullName: 'Empirical Bayes (Morris)' };
 };
 
-// 7. SJ (Sidik-Jonkman)
+// 7. SJ (Sidik-Jonkman, 2005, Stat Med 24:3899)
+// One-step estimator as implemented in metafor:
+// tau2_0 = population variance of yi = sum((yi - ybar)^2) / k
+// Then: tau2 = tau2_0 * Q*(tau2_0) / (k - 1)
+// where Q*(tau2_0) = sum(w_i * (yi - theta_w)^2), w_i = 1/(vi + tau2_0)
 ESTIMATORS.SJ = function(yi, vi) {
   var k = yi.length;
-  var fe = fePool(yi, vi);
-  // Initial tau2_0 = median of (yi - theta_FE)^2
-  var resids2 = yi.map(function(y){ return Math.pow(y - fe.theta, 2); });
-  resids2.sort(function(a,b){ return a - b; });
-  var tau2_0 = resids2.length % 2 === 1 ? resids2[Math.floor(resids2.length/2)] : (resids2[resids2.length/2 - 1] + resids2[resids2.length/2]) / 2;
-  if (tau2_0 < 0.01) tau2_0 = 0.01; // SJ needs non-zero start
-  var tau2 = tau2_0;
-  for (var iter = 0; iter < 100; iter++) {
-    var ws = vi.map(function(v){ return 1/(v + tau2); });
-    var sumWs = ws.reduce(function(a,b){ return a+b; }, 0);
-    var theta = ws.reduce(function(a,b,i){ return a + b*yi[i]; }, 0) / sumWs;
-    // SJ update: tau2 = (1/(k-1)) * sum((vi+tau2_old)*((yi-theta)^2)/(vi+tau2_old))
-    // Simplification: tau2_new = (1/(k-1)) * sum( (yi - theta)^2 * (vi+tau2)/(vi+tau2) )...
-    // Actually SJ: tau2_new = (1/(k-1)) * sum( (vi + tau2_old) * (yi - theta_new)^2 / (vi + tau2_old) )
-    // Which simplifies to: tau2_new = (1/(k-1)) * sum( (yi - theta)^2 )  ??? That's too simple.
-    //
-    // Correct SJ (Sidik & Jonkman 2005):
-    // tau2_new = sum( w_hat_i * (yi - theta_hat)^2 ) / (k-1)
-    // where w_hat_i = (vi + tau2_old) / vi^2 ... no.
-    //
-    // SJ estimator: tau2 = (1/(k-1)) * sum( ((yi - theta_FE)^2 - vi) * (vi + tau2_0) / vi )
-    // But this is the one-step version. The iterative version:
-    // tau2_{j+1} = (1/(k-1)) * sum( (vi+tau2_j)/(vi) * (yi-theta_j)^2 - vi )...
-    //
-    // Let me use the standard one-step SJ:
-    // tau2_SJ = (1/(k-1)) * sum( (yi - theta_w)^2 / (1 - h_i) ) - mean(vi)
-    // where h_i = w_i / sum(w_i) are hat values
-    // This is Cochran-type with hat correction. But SJ specifically is:
-    // tau2 = (1/(k-1)) * sum((vi + tau2_init) * wi_init * (yi - theta_init)^2)
-    // where wi_init = 1/tau2_init (equal weights at first step), theta_init = mean(yi)
-    // Then iterate.
-    //
-    // Simplest correct SJ iteration:
-    var tau2_new = 0;
-    for (var i = 0; i < k; i++) {
-      tau2_new += (vi[i] + tau2) * Math.pow(yi[i] - theta, 2) / vi[i];
-    }
-    tau2_new = Math.max(0, tau2_new / (k - 1) - k * tau2 / (k - 1));
-    // Above is wrong. Let me just use: tau2_new = sum(ws*(yi-theta)^2) / (k-1) * (1/mean(ws))
-    // This doesn't look right either.
-    //
-    // THE definitive SJ formula (Sidik & Jonkman, 2005, Stat Med):
-    // Step 1: tau2_0 (initial, e.g. Q-based or fixed value)
-    // Step 2: w_i = 1/(vi + tau2_0), theta = weighted mean
-    // Step 3: tau2 = (1/k) * sum((yi - theta)^2)  ... wait that's SJ0.
-    //
-    // From Viechtbauer (2005), the SJ estimator is:
-    // tau2_SJ = (sum_i (yi - theta_UW)^2 - sum(vi)) / (k-1)
-    // where theta_UW is unweighted mean. But it can be negative, so max(0, .).
-    // But then iterative: replace vi with vi+tau2 weights.
-    //
-    // I'll implement the one commonly used version:
-    var theta_uw = yi.reduce(function(a,b){ return a+b; }, 0) / k;
-    var ss = yi.reduce(function(a,y){ return a + Math.pow(y - theta_uw, 2); }, 0);
-    tau2_new = Math.max(0, (ss - vi.reduce(function(a,b){return a+b;},0)) / (k - 1));
-    tau2 = tau2_new;
-    break; // SJ is a one-step (or finite-step) estimator
-  }
+  if (k < 2) return { tau2: 0, method: 'SJ', fullName: 'Sidik-Jonkman' };
+  // Step 1: tau2_0 = population variance of yi
+  var ybar = yi.reduce(function(a,b){ return a+b; }, 0) / k;
+  var tau2_0 = yi.reduce(function(a,y){ return a + Math.pow(y - ybar, 2); }, 0) / k;
+  // Step 2: Compute Q* at tau2_0
+  var ws = vi.map(function(v){ return 1/(v + tau2_0); });
+  var sumWs = ws.reduce(function(a,b){ return a+b; }, 0);
+  var theta = ws.reduce(function(a,b,i){ return a + b*yi[i]; }, 0) / sumWs;
+  var Qs = ws.reduce(function(a,b,i){ return a + b * Math.pow(yi[i] - theta, 2); }, 0);
+  // Step 3: One-step SJ estimate
+  var tau2 = Math.max(0, tau2_0 * Qs / (k - 1));
   return { tau2: tau2, method: 'SJ', fullName: 'Sidik-Jonkman' };
 };
 
 // 8. HS (Hunter-Schmidt)
+// Uses inverse-variance weighted mean and weighted variance.
+// tau2 = Q/sum(w) - k/sum(w) = (Q - k) / sum(w)
+// where Q = Cochran's Q, w_i = 1/vi (as in metafor)
 ESTIMATORS.HS = function(yi, vi) {
   var k = yi.length;
-  // Unweighted mean of sampling variances
-  var vbar = vi.reduce(function(a,b){ return a+b; }, 0) / k;
-  // Unweighted mean of yi
-  var ybar = yi.reduce(function(a,b){ return a+b; }, 0) / k;
-  // S^2 = (1/(k-1)) * sum((yi - ybar)^2)
-  var S2 = yi.reduce(function(a,y){ return a + Math.pow(y - ybar, 2); }, 0) / (k - 1);
-  var tau2 = Math.max(0, S2 - vbar);
+  var fe = fePool(yi, vi);
+  var tau2 = Math.max(0, (fe.Q - k) / fe.sumW);
   return { tau2: tau2, method: 'HS', fullName: 'Hunter-Schmidt' };
 };
 
