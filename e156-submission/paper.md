@@ -1,6 +1,6 @@
 Mahmood Ahmad
 Tahir Heart Institute
-author@example.com
+mahmood.ahmad2@nhs.net
 
 Pooling Suite: Browser-Based Meta-Analysis Engine with Ten Heterogeneity Estimators
 
