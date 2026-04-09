@@ -145,5 +145,71 @@ class PoolingSuiteTests(unittest.TestCase):
         tab = self.driver.find_element(By.ID, 'tab-data')
         tab.send_keys(Keys.ARROW_RIGHT); time.sleep(0.2)
 
+    def test_26_sample_size_column(self):
+        """Data table should have a sample size (n) column header."""
+        self._reload()
+        headers = self.driver.find_element(By.ID, 'data-table').text.lower()
+        self.assertIn('n', headers)
+
+    def test_27_sample_size_inputs(self):
+        """Loading BCG example should populate ni inputs."""
+        self._reload(); self._click(By.ID, 'btn-load-bcg'); time.sleep(0.3)
+        ni_inputs = self.driver.find_elements(By.CSS_SELECTOR, '#data-tbody .study-ni')
+        self.assertGreater(len(ni_inputs), 0)
+        # First BCG study should have ni=233
+        val = ni_inputs[0].get_attribute('value')
+        self.assertEqual(val, '233')
+
+    def test_28_bias_tests_card_exists(self):
+        """Bias tests card should exist in the influence tab."""
+        self._load_and_run()
+        self._click(By.ID, 'tab-influence'); time.sleep(0.3)
+        card = self.driver.find_element(By.ID, 'card-bias-tests')
+        self.assertTrue(card.is_displayed())
+
+    def test_29_egger_test_results(self):
+        """After analysis, Egger's test results should be shown."""
+        self._load_and_run()
+        self._click(By.ID, 'tab-influence'); time.sleep(0.3)
+        text = self.driver.find_element(By.ID, 'bias-tests-container').text
+        self.assertIn('Egger', text)
+        self.assertIn('Intercept', text)
+
+    def test_30_peters_test_results(self):
+        """With BCG data (has ni), Peters' test should show results."""
+        self._load_and_run()
+        self._click(By.ID, 'tab-influence'); time.sleep(0.3)
+        text = self.driver.find_element(By.ID, 'bias-tests-container').text
+        self.assertIn('Peters', text)
+        self.assertIn('Slope', text)
+
+    def test_31_egger_report_text(self):
+        """Report methods text should mention Egger's test."""
+        self._load_and_run()
+        self._click(By.ID, 'tab-report'); time.sleep(0.3)
+        text = self.driver.find_element(By.ID, 'methods-text').text
+        self.assertIn('Egger', text)
+
+    def test_32_peters_report_text(self):
+        """Report methods text should mention Peters' test when ni available."""
+        self._load_and_run()
+        self._click(By.ID, 'tab-report'); time.sleep(0.3)
+        text = self.driver.find_element(By.ID, 'methods-text').text
+        self.assertIn('Peters', text)
+
+    def test_33_hksj_floor_no_js_errors(self):
+        """HKSJ floor correction should not produce JS errors."""
+        self._load_and_run()
+        logs = self.driver.get_log('browser')
+        severe = [l for l in logs if l['level']=='SEVERE' and 'favicon' not in l.get('message','')]
+        self.assertEqual(len(severe), 0, f"JS errors found: {severe}")
+
+    def test_34_bias_r_code(self):
+        """R code should include bias test commands."""
+        self._load_and_run()
+        self._click(By.ID, 'tab-report'); time.sleep(0.3)
+        text = self.driver.find_element(By.ID, 'r-code').text
+        self.assertIn('regtest', text)
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
