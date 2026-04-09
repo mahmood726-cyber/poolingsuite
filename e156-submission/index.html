@@ -257,7 +257,7 @@ const D = {
   "primary_estimand": "Pooled effect (tau-squared comparison)",
   "study_count": null,
   "participant_count": null,
-  "version": "1.0",
+  "version": "1.1",
   "date": "2026-03-26",
   "certainty": "",
   "app": "Pooling Suite v1.0",
@@ -266,6 +266,12 @@ const D = {
   "doi": "",
   "protocol": "",
   "source_article": "",
+  "notes": {
+    "app": "Pooling Suite v1.1",
+    "data": "BCG vaccine (13 studies), magnesium for MI (8 studies)",
+    "code": "https://github.com/mahmood726-cyber/poolingsuite",
+    "dashboard": "https://mahmood726-cyber.github.io/poolingsuite/"
+  },
   "body": "How do methodological choices among heterogeneity estimators and confidence interval methods affect pooled meta-analytic estimates in practice? Two built-in datasets, BCG vaccine (13 studies) and magnesium for myocardial infarction (8 studies), were analyzed across all estimator and CI method combinations. Pooling Suite, a browser-based application of 1,840 lines, implements ten tau-squared estimators and three CI methods, producing a 30-cell comparison table with forest plots, Baujat plots, GOSH analysis, and full influence diagnostics including Cook distance. The BCG dataset showed pooled log-RR ranging from -0.71 (95% CI -1.06 to -0.37) under ML to -0.74 under Hedges, with tau-squared varying from 0.30 to 0.51. Leave-one-out analysis identified the Madras and Chingleput studies as dominant heterogeneity sources across all ten estimators. This tool provides the first side-by-side browser-based comparison of ten meta-analytic estimators, validated against R metafor with 25 Selenium tests. A limitation is that the current version does not implement profile likelihood or Kenward-Roger corrections for small meta-analyses.",
   "validation": {
     "status": "pass",
@@ -463,6 +469,7 @@ const notes = D.notes || {};
 const noteFields = [
   ["Type", D.type], ["Primary Estimand", D.primary_estimand],
   ["App", notes.app], ["Data", notes.data], ["Code", notes.code],
+  ["Dashboard", notes.dashboard],
   ["DOI", notes.doi], ["Version", notes.version || D.version],
   ["Certainty", notes.certainty || D.certainty],
   ["Validation", notes.validation || (D.validation||{}).status]
