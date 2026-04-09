@@ -150,7 +150,7 @@ tr:hover { background: var(--accent-light); }
     </div>
     <div id="data-table-container">
       <table id="data-table">
-        <thead><tr><th style="width:30px">#</th><th>Study</th><th>Effect (yi)</th><th>SE</th><th style="width:40px"></th></tr></thead>
+        <thead><tr><th style="width:30px">#</th><th>Study</th><th>Effect (yi)</th><th>SE</th><th>n <span class="info-tip" data-tip="Total sample size per study. Optional — needed for Peters' test (publication bias for binary outcomes).">?</span></th><th style="width:40px"></th></tr></thead>
         <tbody id="data-tbody"></tbody>
       </table>
     </div>
@@ -241,6 +241,12 @@ tr:hover { background: var(--accent-light); }
         </thead>
         <tbody id="influence-tbody"></tbody>
       </table>
+    </div>
+  </div>
+  <div class="card" id="card-bias-tests">
+    <div class="card-title">Publication Bias Tests</div>
+    <div id="bias-tests-container">
+      <p style="font-size:13px;color:var(--text2);">Run analysis to see bias test results.</p>
     </div>
   </div>
   <div class="card">
@@ -663,6 +669,10 @@ function hksjCI(theta, yi, vi, tau2, k) {
   var sumWs = ws.reduce(function(a,b){ return a+b; }, 0);
   var Qs = ws.reduce(function(a,w,i){ return a + w * Math.pow(yi[i] - theta, 2); }, 0);
   var seAdj = Math.sqrt(Qs / ((k - 1) * sumWs));
+  // Floor correction: if Q < k-1, HKSJ narrows CI below Wald.
+  // Enforce seAdj >= waldSE so HKSJ never shrinks below Wald CI.
+  var waldSE = Math.sqrt(1 / sumWs);
+  seAdj = Math.max(seAdj, waldSE);
   var tcrit = Math.abs(tQuantile(0.025, k - 1));
   return [theta - tcrit * seAdj, theta + tcrit * seAdj];
 }
@@ -841,6 +851,138 @@ function baujatData(yi, vi) {
   return results;
 }
 
+/* ---------- WLS Regression (for bias tests) ---------- */
+function wlsRegression(y, x, w) {
+  // Weighted least squares: y = intercept + slope * x
+  // w = inverse-variance weights
+  var k = y.length;
+  var sumW = 0, sumWx = 0, sumWy = 0, sumWxx = 0, sumWxy = 0;
+  for (var i = 0; i < k; i++) {
+    sumW += w[i];
+    sumWx += w[i] * x[i];
+    sumWy += w[i] * y[i];
+    sumWxx += w[i] * x[i] * x[i];
+    sumWxy += w[i] * x[i] * y[i];
+  }
+  var det = sumW * sumWxx - sumWx * sumWx;
+  if (Math.abs(det) < 1e-30) return null;
+  var intercept = (sumWxx * sumWy - sumWx * sumWxy) / det;
+  var slope = (sumW * sumWxy - sumWx * sumWy) / det;
+  // Residual variance
+  var ssRes = 0;
+  for (var i = 0; i < k; i++) {
+    var resid = y[i] - intercept - slope * x[i];
+    ssRes += w[i] * resid * resid;
+  }
+  var sigma2 = k > 2 ? ssRes / (k - 2) : ssRes;
+  // Standard errors of coefficients
+  var seIntercept = Math.sqrt(sigma2 * sumWxx / det);
+  var seSlope = Math.sqrt(sigma2 * sumW / det);
+  // t-statistics
+  var tIntercept = intercept / seIntercept;
+  var tSlope = slope / seSlope;
+  var df = k - 2;
+  // Two-sided p-values using t-distribution CDF
+  var pIntercept = df > 0 ? 2 * (1 - normalCDF(Math.abs(tIntercept) * Math.sqrt(df / (df + tIntercept * tIntercept)))) : 1;
+  var pSlope = df > 0 ? 2 * (1 - normalCDF(Math.abs(tSlope) * Math.sqrt(df / (df + tSlope * tSlope)))) : 1;
+  // More precise p-value via incomplete beta
+  if (df > 0) {
+    var xb = df / (df + tIntercept * tIntercept);
+    pIntercept = betaIncomplete(df / 2, 0.5, xb);
+    var xb2 = df / (df + tSlope * tSlope);
+    pSlope = betaIncomplete(df / 2, 0.5, xb2);
+  }
+  return {
+    intercept: intercept, slope: slope,
+    seIntercept: seIntercept, seSlope: seSlope,
+    tIntercept: tIntercept, tSlope: tSlope,
+    pIntercept: pIntercept, pSlope: pSlope,
+    df: df
+  };
+}
+
+/* ---------- Regularized incomplete beta (for t-test p-values) ---------- */
+function betaIncomplete(a, b, x) {
+  // I_x(a,b) via continued fraction (Lentz method)
+  if (x < 0 || x > 1) return NaN;
+  if (x === 0) return 0;
+  if (x === 1) return 1;
+  // Use symmetry: if x > (a+1)/(a+b+2), use I_x(a,b) = 1 - I_{1-x}(b,a)
+  if (x > (a + 1) / (a + b + 2)) {
+    return 1 - betaIncomplete(b, a, 1 - x);
+  }
+  var lbeta = lgamma(a) + lgamma(b) - lgamma(a + b);
+  var front = Math.exp(Math.log(x) * a + Math.log(1 - x) * b - lbeta) / a;
+  // Continued fraction
+  var f = 1, c = 1, d = 1;
+  for (var m = 0; m <= 200; m++) {
+    var am;
+    if (m === 0) {
+      am = 1;
+    } else {
+      var m2 = 2 * Math.ceil(m / 2);
+      var mm = Math.ceil(m / 2);
+      if (m % 2 === 1) {
+        // Odd terms: d_{2m+1}
+        am = -(a + mm) * (a + b + mm) * x / ((a + 2 * mm) * (a + 2 * mm + 1));
+      } else {
+        // Even terms: d_{2m}
+        am = mm * (b - mm) * x / ((a + 2 * mm - 1) * (a + 2 * mm));
+      }
+    }
+    d = 1 + am * d; if (Math.abs(d) < 1e-30) d = 1e-30; d = 1 / d;
+    c = 1 + am / c; if (Math.abs(c) < 1e-30) c = 1e-30;
+    f *= c * d;
+    if (m > 0 && Math.abs(c * d - 1) < 1e-12) break;
+  }
+  return front * (f - 1);
+}
+
+/* ---------- Egger's Test (radial version) ---------- */
+function eggersTest(yi, vi) {
+  var k = yi.length;
+  if (k < 3) return null;
+  // Radial Egger: regress yi/SE on 1/SE, weighted by 1
+  // Equivalently: WLS of yi on SE with weights 1/vi
+  var se = vi.map(function(v) { return Math.sqrt(v); });
+  var prec = se.map(function(s) { return 1 / s; });
+  // Standard Egger: regress standardized effect (yi/sei) on precision (1/sei)
+  // Using WLS: y = yi, x = sei, weights = 1/vi
+  var w = vi.map(function(v) { return 1 / v; });
+  var result = wlsRegression(yi, se, w);
+  if (!result) return null;
+  return {
+    intercept: result.intercept,
+    se: result.seIntercept,
+    t: result.tIntercept,
+    p: result.pIntercept,
+    df: result.df,
+    method: 'Egger'
+  };
+}
+
+/* ---------- Peters' Test (for binary outcomes) ---------- */
+function petersTest(yi, vi, ni) {
+  // Peters' test: regress yi on 1/n (total sample size), weighted by 1/vi
+  // Better than Egger for binary outcomes (OR, RR)
+  var k = yi.length;
+  if (k < 3) return null;
+  if (!ni || ni.length !== k) return null;
+  var x = ni.map(function(n) { return 1 / n; });
+  var w = vi.map(function(v) { return 1 / v; });
+  var result = wlsRegression(yi, x, w);
+  if (!result) return null;
+  return {
+    intercept: result.intercept,
+    slope: result.slope,
+    seSlope: result.seSlope,
+    t: result.tSlope,
+    p: result.pSlope,
+    df: result.df,
+    method: 'Peters'
+  };
+}
+
 /* ---------- GOSH ---------- */
 function runGOSH(yi, vi, studyNames, rng) {
   var k = yi.length;
@@ -898,8 +1040,10 @@ function runGOSH(yi, vi, studyNames, rng) {
    UI / DOM
    ================================================================ */
 var APP = {
-  yi: [], vi: [], studyNames: [],
+  yi: [], vi: [], studyNames: [], ni: null,
   results: null,
+  egger: null,
+  peters: null,
   rng: seedPRNG(42)
 };
 
@@ -938,13 +1082,14 @@ tabBtns.forEach(function(btn) {
 /* ---------- Data table ---------- */
 var dataBody = document.getElementById('data-tbody');
 var rowCount = 0;
-function addDataRow(study, effect, se) {
+function addDataRow(study, effect, se, ni) {
   rowCount++;
   var tr = document.createElement('tr');
   tr.innerHTML = '<td>' + rowCount + '</td>' +
     '<td><input type="text" class="study-name" value="' + escapeHtml(study || ('Study ' + rowCount)) + '" aria-label="Study name"></td>' +
     '<td><input type="number" step="any" class="study-effect" value="' + escapeHtml(effect != null ? String(effect) : '') + '" aria-label="Effect size"></td>' +
     '<td><input type="number" step="any" min="0.001" class="study-se" value="' + escapeHtml(se != null ? String(se) : '') + '" aria-label="Standard error"></td>' +
+    '<td><input type="number" step="1" min="2" class="study-ni" value="' + escapeHtml(ni != null ? String(ni) : '') + '" aria-label="Sample size" placeholder="opt."></td>' +
     '<td><button class="btn-danger btn-sm row-del" aria-label="Delete row">&times;</button></td>';
   dataBody.appendChild(tr);
   tr.querySelector('.row-del').addEventListener('click', function() { tr.remove(); renumberRows(); });
@@ -959,9 +1104,10 @@ function clearData() {
   rowCount = 0;
 }
 function readData() {
-  var yi = [], vi = [], names = [];
+  var yi = [], vi = [], names = [], ni = [];
   var rows = dataBody.querySelectorAll('tr');
   var valid = true;
+  var hasNi = false;
   rows.forEach(function(r) {
     var name = r.querySelector('.study-name').value.trim();
     var eff = parseFloat(r.querySelector('.study-effect').value);
@@ -970,9 +1116,18 @@ function readData() {
     names.push(name || 'Study');
     yi.push(eff);
     vi.push(se * se);
+    var niInput = r.querySelector('.study-ni');
+    var n = niInput ? parseFloat(niInput.value) : NaN;
+    if (isFinite(n) && n >= 2) { ni.push(n); hasNi = true; }
+    else { ni.push(NaN); }
   });
   if (!valid || yi.length < 2) return null;
-  return { yi: yi, vi: vi, names: names };
+  var result = { yi: yi, vi: vi, names: names };
+  // Only include ni if ALL studies have valid sample sizes
+  if (hasNi && ni.every(function(n) { return isFinite(n); })) {
+    result.ni = ni;
+  }
+  return result;
 }
 
 document.getElementById('btn-add-row').addEventListener('click', function() { addDataRow(); });
@@ -999,7 +1154,9 @@ csvImportBtn.addEventListener('click', function() {
     // Skip header
     if (/study/i.test(line) && /effect|yi|es/i.test(line)) return;
     var parts = line.split(/[,\t]/);
-    if (parts.length >= 3) {
+    if (parts.length >= 4) {
+      addDataRow(parts[0].trim(), parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3]));
+    } else if (parts.length >= 3) {
       addDataRow(parts[0].trim(), parseFloat(parts[1]), parseFloat(parts[2]));
     } else if (parts.length === 2) {
       addDataRow('Study', parseFloat(parts[0]), parseFloat(parts[1]));
@@ -1012,46 +1169,49 @@ csvImportBtn.addEventListener('click', function() {
 document.getElementById('btn-export-csv').addEventListener('click', function() {
   var data = readData();
   if (!data) { alert('No valid data to export.'); return; }
-  var csv = 'study,effect,se\n';
+  var hasNi = data.ni && data.ni.length > 0;
+  var csv = hasNi ? 'study,effect,se,n\n' : 'study,effect,se\n';
   data.names.forEach(function(n, i) {
-    csv += '"' + n.replace(/"/g,'""') + '",' + data.yi[i] + ',' + Math.sqrt(data.vi[i]) + '\n';
+    csv += '"' + n.replace(/"/g,'""') + '",' + data.yi[i] + ',' + Math.sqrt(data.vi[i]);
+    if (hasNi) csv += ',' + (isFinite(data.ni[i]) ? data.ni[i] : '');
+    csv += '\n';
   });
   downloadFile(csv, 'pooling-suite-data.csv', 'text/csv');
 });
 
 /* ---------- Example data ---------- */
-// BCG Vaccine data (13 studies, log RR)
+// BCG Vaccine data (13 studies, log RR) — ni from Colditz et al 1994
 var BCG_DATA = [
-  { name: 'Aronson 1948', yi: -0.8893, se: 0.4646 },
-  { name: 'Ferguson & Simes 1949', yi: -1.5854, se: 0.3552 },
-  { name: 'Rosenthal et al 1960', yi: -1.3481, se: 0.1727 },
-  { name: 'Hart & Sutherland 1977', yi: -1.4416, se: 0.1124 },
-  { name: 'Frimodt-Moller et al 1973', yi: -1.6209, se: 0.2169 },
-  { name: 'Stein & Aronson 1953', yi: 0.0120, se: 0.2503 },
-  { name: 'Vandiviere et al 1973', yi: -0.4694, se: 0.4524 },
-  { name: 'TPT Madras 1980', yi: 0.0128, se: 0.0726 },
-  { name: 'Coetzee & Berjak 1968', yi: -0.9531, se: 0.2230 },
-  { name: 'Rosenthal et al 1961', yi: -0.3407, se: 0.2553 },
-  { name: 'Comstock et al 1974', yi: -0.0173, se: 0.1704 },
-  { name: 'Comstock & Webster 1969', yi: -0.4535, se: 0.4358 },
-  { name: 'Comstock et al 1976', yi: -0.0173, se: 0.3013 }
+  { name: 'Aronson 1948', yi: -0.8893, se: 0.4646, ni: 233 },
+  { name: 'Ferguson & Simes 1949', yi: -1.5854, se: 0.3552, ni: 306 },
+  { name: 'Rosenthal et al 1960', yi: -1.3481, se: 0.1727, ni: 24468 },
+  { name: 'Hart & Sutherland 1977', yi: -1.4416, se: 0.1124, ni: 54417 },
+  { name: 'Frimodt-Moller et al 1973', yi: -1.6209, se: 0.2169, ni: 5069 },
+  { name: 'Stein & Aronson 1953', yi: 0.0120, se: 0.2503, ni: 2545 },
+  { name: 'Vandiviere et al 1973', yi: -0.4694, se: 0.4524, ni: 1418 },
+  { name: 'TPT Madras 1980', yi: 0.0128, se: 0.0726, ni: 174707 },
+  { name: 'Coetzee & Berjak 1968', yi: -0.9531, se: 0.2230, ni: 7277 },
+  { name: 'Rosenthal et al 1961', yi: -0.3407, se: 0.2553, ni: 1699 },
+  { name: 'Comstock et al 1974', yi: -0.0173, se: 0.1704, ni: 50634 },
+  { name: 'Comstock & Webster 1969', yi: -0.4535, se: 0.4358, ni: 2498 },
+  { name: 'Comstock et al 1976', yi: -0.0173, se: 0.3013, ni: 27338 }
 ];
 
 // Magnesium for MI (Normand 1999, log OR)
 var MG_DATA = [
-  { name: 'Morton 1984', yi: -2.197, se: 1.048 },
-  { name: 'Rasmussen 1986', yi: -2.197, se: 1.265 },
-  { name: 'Smith 1986', yi: -1.252, se: 0.728 },
-  { name: 'Abraham 1987', yi: -0.511, se: 0.823 },
-  { name: 'Feldstedt 1991', yi: 0.202, se: 0.399 },
-  { name: 'Schechter 1991', yi: -2.303, se: 1.054 },
-  { name: 'Ceremuzynski 1992', yi: -0.693, se: 0.602 },
-  { name: 'Singh 1992', yi: -1.204, se: 0.461 }
+  { name: 'Morton 1984', yi: -2.197, se: 1.048, ni: 40 },
+  { name: 'Rasmussen 1986', yi: -2.197, se: 1.265, ni: 56 },
+  { name: 'Smith 1986', yi: -1.252, se: 0.728, ni: 200 },
+  { name: 'Abraham 1987', yi: -0.511, se: 0.823, ni: 48 },
+  { name: 'Feldstedt 1991', yi: 0.202, se: 0.399, ni: 150 },
+  { name: 'Schechter 1991', yi: -2.303, se: 1.054, ni: 59 },
+  { name: 'Ceremuzynski 1992', yi: -0.693, se: 0.602, ni: 49 },
+  { name: 'Singh 1992', yi: -1.204, se: 0.461, ni: 76 }
 ];
 
 function loadExample(data) {
   clearData();
-  data.forEach(function(d) { addDataRow(d.name, d.yi, d.se); });
+  data.forEach(function(d) { addDataRow(d.name, d.yi, d.se, d.ni); });
 }
 document.getElementById('btn-load-bcg').addEventListener('click', function() { loadExample(BCG_DATA); });
 document.getElementById('btn-load-mg').addEventListener('click', function() { loadExample(MG_DATA); });
@@ -1068,6 +1228,7 @@ function runAnalysis() {
   APP.yi = data.yi;
   APP.vi = data.vi;
   APP.studyNames = data.names;
+  APP.ni = data.ni || null;
 
   document.getElementById('data-status').innerHTML = '<span class="spinner"></span> Running 10 estimators...';
 
@@ -1077,6 +1238,8 @@ function runAnalysis() {
       APP.loo = leaveOneOut(APP.yi, APP.vi);
       APP.influence = influenceMeasures(APP.yi, APP.vi);
       APP.baujat = baujatData(APP.yi, APP.vi);
+      APP.egger = eggersTest(APP.yi, APP.vi);
+      APP.peters = APP.ni ? petersTest(APP.yi, APP.vi, APP.ni) : null;
 
       renderEstimatorTable();
       renderForestPlot();
@@ -1085,6 +1248,7 @@ function runAnalysis() {
       renderInfluenceTable();
       renderTau2BarChart();
       renderThetaCIChart();
+      renderBiasTests();
       renderReport();
 
       document.getElementById('data-status').textContent = 'Analysis complete: ' + data.yi.length + ' studies, 10 estimators, 3 CI methods.';
@@ -1108,7 +1272,7 @@ function runAnalysis() {
     if (saved) {
       var data = JSON.parse(saved);
       data.names.forEach(function(n, i) {
-        addDataRow(n, data.yi[i], Math.sqrt(data.vi[i]));
+        addDataRow(n, data.yi[i], Math.sqrt(data.vi[i]), data.ni ? data.ni[i] : undefined);
       });
     } else {
       // Load BCG as default
@@ -1565,6 +1729,56 @@ function renderGOSHPlot(gosh) {
   container.innerHTML = svg;
 }
 
+/* ---------- Render: Bias Tests ---------- */
+function renderBiasTests() {
+  var container = document.getElementById('bias-tests-container');
+  var k = APP.yi.length;
+  var html = '';
+
+  // Egger's test
+  html += '<h4 style="margin:0 0 8px 0;font-size:14px;">Egger\'s Test (Regression Intercept)</h4>';
+  if (k < 10) {
+    html += '<p style="font-size:13px;color:var(--warning);">Note: Egger\'s test has low power for k &lt; 10 (current k = ' + k + '). Interpret with caution.</p>';
+  }
+  if (APP.egger) {
+    var eg = APP.egger;
+    var egSig = eg.p < 0.05;
+    html += '<table style="font-size:13px;margin-bottom:16px;"><tbody>';
+    html += '<tr><td style="padding:4px 12px 4px 0;font-weight:600;">Intercept</td><td>' + fmt(eg.intercept) + '</td></tr>';
+    html += '<tr><td style="padding:4px 12px 4px 0;font-weight:600;">SE(intercept)</td><td>' + fmt(eg.se) + '</td></tr>';
+    html += '<tr><td style="padding:4px 12px 4px 0;font-weight:600;">t</td><td>' + fmt(eg.t) + '</td></tr>';
+    html += '<tr><td style="padding:4px 12px 4px 0;font-weight:600;">p-value</td><td>' + (eg.p < 0.001 ? '&lt; 0.001' : fmt3(eg.p)) + (egSig ? ' <span class="badge badge-warning">significant</span>' : ' <span class="badge badge-success">n.s.</span>') + '</td></tr>';
+    html += '<tr><td style="padding:4px 12px 4px 0;font-weight:600;">df</td><td>' + eg.df + '</td></tr>';
+    html += '</tbody></table>';
+    html += '<p style="font-size:12px;color:var(--text3);margin-bottom:16px;">Egger\'s test: radial regression intercept. Significant p suggests funnel plot asymmetry (possible publication bias).</p>';
+  } else {
+    html += '<p style="font-size:13px;color:var(--text3);">Need k &ge; 3 studies.</p>';
+  }
+
+  // Peters' test
+  html += '<h4 style="margin:0 0 8px 0;font-size:14px;">Peters\' Test (Binary Outcomes)</h4>';
+  if (APP.ni) {
+    if (APP.peters) {
+      var pt = APP.peters;
+      var ptSig = pt.p < 0.05;
+      html += '<table style="font-size:13px;margin-bottom:8px;"><tbody>';
+      html += '<tr><td style="padding:4px 12px 4px 0;font-weight:600;">Slope (1/n)</td><td>' + fmt(pt.slope) + '</td></tr>';
+      html += '<tr><td style="padding:4px 12px 4px 0;font-weight:600;">SE(slope)</td><td>' + fmt(pt.seSlope) + '</td></tr>';
+      html += '<tr><td style="padding:4px 12px 4px 0;font-weight:600;">t</td><td>' + fmt(pt.t) + '</td></tr>';
+      html += '<tr><td style="padding:4px 12px 4px 0;font-weight:600;">p-value</td><td>' + (pt.p < 0.001 ? '&lt; 0.001' : fmt3(pt.p)) + (ptSig ? ' <span class="badge badge-warning">significant</span>' : ' <span class="badge badge-success">n.s.</span>') + '</td></tr>';
+      html += '<tr><td style="padding:4px 12px 4px 0;font-weight:600;">df</td><td>' + pt.df + '</td></tr>';
+      html += '</tbody></table>';
+      html += '<p style="font-size:12px;color:var(--text3);">Peters\' test: recommended for binary outcomes (OR, RR). Uses 1/n weighting instead of 1/SE, avoiding the false-positive bias of Egger\'s test with binary data.</p>';
+    } else {
+      html += '<p style="font-size:13px;color:var(--text3);">Need k &ge; 3 studies with sample sizes.</p>';
+    }
+  } else {
+    html += '<p style="font-size:13px;color:var(--text3);">Enter sample sizes (n) in the data table to enable Peters\' test.</p>';
+  }
+
+  container.innerHTML = html;
+}
+
 /* ---------- Render: Report ---------- */
 function renderReport() {
   var yi = APP.yi, vi = APP.vi, names = APP.studyNames;
@@ -1592,8 +1806,22 @@ function renderReport() {
     'Influence diagnostics included leave-one-out analysis, Baujat plot, Cook\'s distance, ' +
     'hat values, DFFITS, covariance ratios, and studentized residuals. ' +
     'GOSH (Graphical Overview of Study Heterogeneity) analysis was available for visual inspection ' +
-    'of heterogeneity patterns across all possible study subsets.\n\n' +
-    'All analyses were performed using PoolingSuite v1.0 (browser-based).';
+    'of heterogeneity patterns across all possible study subsets.\n\n';
+
+  // Bias test results
+  if (APP.egger) {
+    methodsText += 'Publication bias was assessed using Egger\'s regression test (intercept = ' +
+      fmt(APP.egger.intercept) + ', t = ' + fmt(APP.egger.t) + ', p ' +
+      (APP.egger.p < 0.001 ? '< 0.001' : '= ' + fmt3(APP.egger.p)) + ').';
+    if (APP.peters) {
+      methodsText += ' Peters\' test for binary outcomes was also computed (slope = ' +
+        fmt(APP.peters.slope) + ', t = ' + fmt(APP.peters.t) + ', p ' +
+        (APP.peters.p < 0.001 ? '< 0.001' : '= ' + fmt3(APP.peters.p)) + ').';
+    }
+    methodsText += '\n\n';
+  }
+
+  methodsText += 'All analyses were performed using PoolingSuite v1.0 (browser-based).';
 
   document.getElementById('methods-text').textContent = methodsText;
 
@@ -1613,7 +1841,12 @@ function renderReport() {
   rCode += '       header = TRUE, mlab = "REML pooled estimate")\n\n';
   rCode += '# Influence diagnostics\ninf <- influence(rma(yi = yi, sei = sei, slab = slab, method = "REML"))\nplot(inf)\n\n';
   rCode += '# Leave-one-out\nleave1out(rma(yi = yi, sei = sei, slab = slab, method = "REML"))\n\n';
-  rCode += '# GOSH\ngosh.res <- gosh(rma(yi = yi, sei = sei, slab = slab, method = "DL"))\nplot(gosh.res)\n';
+  rCode += '# GOSH\ngosh.res <- gosh(rma(yi = yi, sei = sei, slab = slab, method = "REML"))\nplot(gosh.res)\n\n';
+  rCode += '# Publication bias tests\nregtest(res_hksj, model = "lm")  # Egger\'s test\n';
+  if (APP.ni) {
+    rCode += '\n# Peters\' test (for binary outcomes)\nni <- c(' + APP.ni.map(function(n){ return String(n); }).join(', ') + ')\n';
+    rCode += 'regtest(res_hksj, model = "lm", predictor = "ni", ni = ni)  # Peters\' test\n';
+  }
 
   document.getElementById('r-code').textContent = rCode;
 }
