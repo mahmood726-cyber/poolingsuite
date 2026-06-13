@@ -10,7 +10,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-HTML = 'file:///' + os.path.abspath(r'C:\Models\PoolingSuite\pooling-suite.html').replace('\\', '/')
+HTML = 'file:///' + os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'pooling-suite.html').replace('\\', '/')
 
 
 class TestPoolingSuite(unittest.TestCase):

@@ -11,7 +11,7 @@ Pooling Suite implements 10 between-study heterogeneity (tau-squared) estimators
 ## Features
 
 - 10 tau-squared estimators: Fixed-Effect (FE), DerSimonian-Laird (DL), Restricted Maximum Likelihood (REML), Maximum Likelihood (ML), Paule-Mandel (PM), Empirical Bayes (Morris), Sidik-Jonkman (SJ), Hunter-Schmidt (HS), Hedges (HE), Bowden-Dudbridge (BD)
-- 3 confidence interval methods: Wald (z-based), Hartung-Knapp-Sidik-Jonkman (HKSJ, t-based with adjusted SE), Knapp-Riliet (t-distribution)
+- 3 confidence interval methods: Wald (z-based), Hartung-Knapp-Sidik-Jonkman (HKSJ, t-based with adjusted SE), t-distribution (t with k-1 df, unadjusted SE)
 - Full comparison table: tau-squared, I-squared, H-squared, pooled theta, SE, CIs, prediction intervals, Q-statistic for all 10 x 3 combinations
 - Forest plot with selectable reference estimator for study weights
 - Tau-squared bar chart comparing all estimators
@@ -52,7 +52,7 @@ Pooling Suite implements 10 between-study heterogeneity (tau-squared) estimators
 | HE | Hedges (unweighted) |
 | BD | Bowden-Dudbridge |
 
-CI methods: Wald uses z-distribution; HKSJ and Knapp-Riliet use t-distribution with k-1 degrees of freedom and adjusted standard errors.
+CI methods: Wald uses the z-distribution; HKSJ uses the t-distribution (k-1 df) with adjusted standard errors; the t-distribution method uses the t-distribution (k-1 df) with unadjusted standard errors.
 
 ## Screenshots
 
@@ -60,7 +60,7 @@ CI methods: Wald uses z-distribution; HKSJ and Knapp-Riliet use t-distribution w
 
 ## Validation
 
-- 25/25 Selenium tests pass
+- 34/34 Selenium tests pass (`test_pooling_suite.py`)
 - All 10 estimators cross-validated against the R metafor package (Viechtbauer 2010)
 
 ## Export

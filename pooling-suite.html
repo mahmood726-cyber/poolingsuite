@@ -184,7 +184,7 @@ tr:hover { background: var(--accent-light); }
     <div class="card-title">Tau&sup2; Estimators Comparison (10 Methods &times; 3 CI Approaches)</div>
     <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">
       All estimators compute &tau;&sup2;, I&sup2;, H&sup2;, pooled &theta;, and confidence/prediction intervals.
-      Wald = z-based CI; HKSJ = Hartung-Knapp-Sidik-Jonkman (t with adjusted SE); KR = Knapp-Riliet t-distribution CI.
+      Wald = z-based CI; HKSJ = Hartung-Knapp-Sidik-Jonkman (t with adjusted SE); t-dist = t-distribution CI (k&minus;1 df, unadjusted SE).
     </p>
     <div class="est-table-wrap">
       <table class="est-table" id="estimator-table">
@@ -1796,7 +1796,7 @@ function renderReport() {
     'Sidik-Jonkman (SJ), Hunter-Schmidt (HS), Hedges (HE), and Bowden-Dudbridge (BD). ' +
     'For each estimator, three confidence interval methods were applied: ' +
     'Wald (z-based), Hartung-Knapp-Sidik-Jonkman (HKSJ, t-distribution with adjusted SE), ' +
-    'and Knapp-Riliet (t-distribution). ' +
+    'and a t-distribution interval (t with k−1 degrees of freedom, unadjusted SE). ' +
     'Prediction intervals were computed using the t-distribution with k\u22122 degrees of freedom.\n\n' +
     'Heterogeneity was assessed using Cochran\'s Q test (Q = ' + fmt2(dl.Q) + ', p ' + (dl.Qp < 0.001 ? '< 0.001' : '= ' + fmt3(dl.Qp)) + '), ' +
     'I\u00B2 (REML-based: ' + fmt2(reml.I2_est) + '%), and tau\u00B2 (REML: ' + fmt(reml.tau2) + '). ' +
